@@ -58,8 +58,11 @@ CSRF_TRUSTED_ORIGINS = environment_csv("DJANGO_CSRF_TRUSTED_ORIGINS")
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes", "django.contrib.sessions",
     "django.contrib.messages", "django.contrib.staticfiles",
-    "accounts", "audit", "taxonomy", "doctoral_students", "professors", "advising",
-    "publications", "documents", "review", "reporting", "dashboard", "public_site",
+    "accounts.apps.AccountsConfig", "audit.apps.AuditConfig", "taxonomy.apps.TaxonomyConfig",
+    "doctoral_students.apps.DoctoralStudentsConfig", "professors.apps.ProfessorsConfig",
+    "advising.apps.AdvisingConfig", "publications.apps.PublicationsConfig",
+    "documents.apps.DocumentsConfig", "review.apps.ReviewConfig", "reporting.apps.ReportingConfig",
+    "dashboard", "public_site",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware", "django.contrib.sessions.middleware.SessionMiddleware",

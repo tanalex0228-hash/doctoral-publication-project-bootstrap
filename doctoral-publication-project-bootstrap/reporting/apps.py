@@ -4,3 +4,4 @@ class ReportingConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "reporting"
     label = "statistics"
+    verbose_name = "統計報表"

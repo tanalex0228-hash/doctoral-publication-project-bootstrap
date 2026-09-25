@@ -4,6 +4,10 @@ from django.urls import include, path
 from accounts import views as account_views
 from .views import healthz
 
+admin.site.site_header = "博士班成果管理系統管理後台"
+admin.site.site_title = "博士班成果管理後台"
+admin.site.index_title = "系統管理"
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("login/", account_views.login_view, name="deployment-login"),
