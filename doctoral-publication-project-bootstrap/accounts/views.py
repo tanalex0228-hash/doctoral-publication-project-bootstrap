@@ -7,6 +7,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from publications.permissions import is_advisor_actor, is_staff_actor
+from doctoral_students.models import DoctoralStudentProfile
 
 
 def _post_login_destination(user):
@@ -14,7 +15,9 @@ def _post_login_destination(user):
         return "review:queue"
     if is_advisor_actor(user):
         return "dashboard:advisor"
-    return "dashboard:student"
+    if user.has_project_role("student") and DoctoralStudentProfile.objects.filter(user=user).exists():
+        return "dashboard:student"
+    return "public_site:publication_list"
 
 
 @never_cache
