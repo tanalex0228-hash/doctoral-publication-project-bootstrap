@@ -1,0 +1,10 @@
+<section class="card shadow-sm mb-3">
+  <div class="card-header bg-white d-flex justify-content-between"><strong>{{ heading }}</strong><span class="badge text-bg-{{ badge }}">{{ publications|length }}</span></div>
+  <div class="list-group list-group-flush">
+    {% for publication in publications %}
+      <a class="list-group-item list-group-item-action" href="{% url 'publications:detail' publication.id %}">
+        <div class="d-flex justify-content-between gap-3"><span>{{ publication.title }}</span><small class="text-muted">{{ publication.publication_type.display_name }}</small></div>
+      </a>
+    {% empty %}<div class="list-group-item text-muted">{{ empty }}</div>{% endfor %}
+  </div>
+</section>

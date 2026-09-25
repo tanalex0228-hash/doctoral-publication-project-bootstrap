@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}我的成果｜博士班成果管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div><h1 class="h3 mb-1">我的成果</h1><p class="text-muted mb-0">{{ student.display_name }}・{{ student.student_number }}</p></div>
+  <a class="btn btn-primary" href="{% url 'publications:create' %}">新增成果</a>
+</div>
+{% include "dashboard/_publication_group.html" with heading="草稿" publications=drafts badge="secondary" empty="目前沒有草稿。" %}
+{% include "dashboard/_publication_group.html" with heading="待審核" publications=submitted badge="warning" empty="目前沒有待審核成果。" %}
+{% include "dashboard/_publication_group.html" with heading="被退回" publications=returned badge="danger" empty="目前沒有被退回成果。" %}
+{% include "dashboard/_publication_group.html" with heading="已核准" publications=approved badge="success" empty="目前沒有已核准成果。" %}
+{% endblock %}

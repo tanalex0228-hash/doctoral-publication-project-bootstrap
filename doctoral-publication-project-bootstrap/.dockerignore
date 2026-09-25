@@ -1,0 +1,15 @@
+.env
+.env.*
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+db.sqlite3
+private_media/
+staticfiles/
+backups/
+*.dump
+*.tar.gz
+tests/
+docs/
+AGENTS.md

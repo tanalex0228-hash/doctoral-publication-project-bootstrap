@@ -1,0 +1,17 @@
+<form method="get" class="card card-body shadow-sm mb-4">
+  <div class="row g-3">
+    <div class="col-md-3"><label class="form-label" for="{{ filter_form.student.id_for_label }}">{{ filter_form.student.label }}</label>{{ filter_form.student }}</div>
+    <div class="col-md-2"><label class="form-label" for="{{ filter_form.year.id_for_label }}">{{ filter_form.year.label }}</label>{{ filter_form.year }}</div>
+    <div class="col-md-3"><label class="form-label" for="{{ filter_form.publication_type.id_for_label }}">{{ filter_form.publication_type.label }}</label>{{ filter_form.publication_type }}</div>
+    <div class="col-md-4"><label class="form-label" for="{{ filter_form.publication_index.id_for_label }}">{{ filter_form.publication_index.label }}</label>{{ filter_form.publication_index }}</div>
+    <div class="col-md-3"><label class="form-label" for="{{ filter_form.research_field.id_for_label }}">{{ filter_form.research_field.label }}</label>{{ filter_form.research_field }}</div>
+    <div class="col-md-3"><label class="form-label" for="{{ filter_form.advisor.id_for_label }}">{{ filter_form.advisor.label }}</label>{{ filter_form.advisor }}</div>
+    <div class="col-md-2"><label class="form-label" for="{{ filter_form.language.id_for_label }}">{{ filter_form.language.label }}</label>{{ filter_form.language }}</div>
+    <div class="col-md-4"><label class="form-label" for="{{ filter_form.author_role.id_for_label }}">{{ filter_form.author_role.label }}</label>{{ filter_form.author_role }}</div>
+    <div class="col-md-2"><label class="form-label" for="{{ filter_form.date_basis.id_for_label }}">{{ filter_form.date_basis.label }}</label>{{ filter_form.date_basis }}</div>
+    <div class="col-md-3"><label class="form-label" for="{{ filter_form.date_from.id_for_label }}">{{ filter_form.date_from.label }}</label>{{ filter_form.date_from }}</div>
+    <div class="col-md-3"><label class="form-label" for="{{ filter_form.date_to.id_for_label }}">{{ filter_form.date_to.label }}</label>{{ filter_form.date_to }}</div>
+  </div>
+  {% if filter_form.errors %}<div class="text-danger small mt-3">請修正篩選條件。</div>{% endif %}
+  <div class="mt-3 d-flex gap-2"><button class="btn btn-primary" type="submit">套用篩選</button><a class="btn btn-outline-secondary" href="{{ request.path }}">清除條件</a></div>
+</form>

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}指導學生｜博士班成果管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div><h1 class="h3 mb-1">指導學生</h1><p class="text-muted mb-0">{{ professor.display_name }}・目前有效的指導關係</p></div>
+</div>
+<section class="card shadow-sm">
+  <div class="card-header bg-white"><strong>Advisees</strong></div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th>學號</th><th>學生</th><th>指導角色</th><th class="text-end">操作</th></tr></thead>
+    <tbody>{% for relation in advisee_relations %}<tr>
+      <td>{{ relation.student.student_number }}</td><td>{{ relation.student.display_name }}</td><td>{{ relation.get_advisor_role_display }}</td>
+      <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'dashboard:advisor_advisee_publications' relation.student.id %}">查看成果</a></td>
+    </tr>{% empty %}<tr><td colspan="4" class="text-muted p-3">目前沒有有效指導關係的學生。</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% include "_pagination.html" %}
+{% endblock %}

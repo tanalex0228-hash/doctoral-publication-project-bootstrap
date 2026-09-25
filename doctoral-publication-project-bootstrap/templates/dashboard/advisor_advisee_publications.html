@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}學生成果｜博士班成果管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+  <div><h1 class="h3 mb-1">{{ student.display_name }} 的成果</h1><p class="text-muted mb-0">{{ student.student_number }}・僅顯示目前授權可檢視的成果</p></div>
+  <a class="btn btn-outline-secondary" href="{% url 'dashboard:advisor' %}">返回指導學生</a>
+</div>
+<section class="card shadow-sm">
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th>標題</th><th>成果類型</th><th>狀態</th><th>更新時間</th><th class="text-end">操作</th></tr></thead>
+    <tbody>{% for publication in publications %}<tr>
+      <td><a class="text-decoration-none" href="{% url 'dashboard:advisor_publication_detail' publication.id %}">{{ publication.title }}</a></td>
+      <td>{{ publication.publication_type.display_name }}</td><td>{{ publication.get_workflow_status_display }}</td>
+      <td>{{ publication.updated_at|date:"Y-m-d" }}</td>
+      <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'dashboard:advisor_publication_detail' publication.id %}">明細</a></td>
+    </tr>{% empty %}<tr><td colspan="5" class="text-muted p-3">沒有目前可檢視的成果。</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% include "_pagination.html" %}
+{% endblock %}

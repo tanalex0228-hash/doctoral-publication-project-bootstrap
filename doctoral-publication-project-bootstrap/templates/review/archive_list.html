@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}封存成果｜博士班成果管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3"><div><h1 class="h3 mb-1">封存成果</h1><p class="text-muted mb-0">封存資料保留完整流程與審核歷史，不提供還原操作。</p></div><div class="d-flex gap-2"><a class="btn btn-outline-primary" href="{% url 'review:queue' %}">審核佇列</a><a class="btn btn-outline-primary" href="{% url 'statistics:dashboard' %}">正式統計</a></div></div>
+<section class="card shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>學生</th><th>成果標題</th><th>類型</th><th>封存時間</th><th>封存者</th></tr></thead><tbody>{% for publication in publications %}<tr><td>{{ publication.owner_student.display_name }}<small class="d-block text-muted">{{ publication.owner_student.student_number }}</small></td><td><a href="{% url 'review:detail' publication.id %}">{{ publication.title }}</a></td><td>{{ publication.publication_type.display_name }}</td><td>{{ publication.archived_at|date:"Y-m-d H:i"|default:"—" }}</td><td>{{ publication.archived_by_username|default:"—" }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">目前沒有封存成果。</td></tr>{% endfor %}</tbody></table></div></section>
+{% include "_pagination.html" %}
+{% endblock %}

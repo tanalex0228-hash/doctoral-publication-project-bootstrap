@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}發佈設定｜博士班成果管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h1 class="h3">發佈與可見範圍</h1><a class="btn btn-outline-secondary" href="{% url 'review:detail' publication.id %}">返回審核詳情</a></div><div class="alert alert-info">此設定不會改變核准狀態或正式統計資格。</div><form method="post" class="card shadow-sm"><div class="card-body">{% csrf_token %}<div class="form-check mb-3">{{ form.is_published }}<label class="form-check-label" for="{{ form.is_published.id_for_label }}">{{ form.is_published.label }}</label></div><label class="form-label" for="{{ form.visibility_scope.id_for_label }}">{{ form.visibility_scope.label }}</label>{{ form.visibility_scope }}{% for error in form.visibility_scope.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div><div class="card-footer bg-white text-end"><button class="btn btn-primary" type="submit">儲存設定</button></div></form>
+{% endblock %}

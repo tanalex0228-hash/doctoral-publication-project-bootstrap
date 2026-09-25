@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{{ portal_title }}｜博士班成果管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start gap-3 mb-4"><div><h1 class="h3 mb-1">{{ portal_title }}</h1><p class="text-muted mb-0">{{ portal_note }}</p></div>{% if user.is_authenticated %}<a class="btn btn-outline-primary" href="{% url 'public_site:department_list' %}">系所成果</a>{% endif %}</div>
+{% include "public_site/_filters.html" %}
+<section class="card shadow-sm"><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>成果標題</th><th>作者</th><th>類型</th><th>期刊／會議</th><th>發表日期</th><th>Publication Index</th><th>研究領域</th><th>語言</th><th>DOI</th></tr></thead><tbody>{% for publication in publications %}<tr><td><a class="text-decoration-none" href="{% url detail_route publication.id %}">{{ publication.title }}</a></td><td>{% for author in publication.authors.all %}{{ author.display_name }}{% if not forloop.last %}、{% endif %}{% empty %}—{% endfor %}</td><td>{{ publication.publication_type.display_name }}</td><td>{{ publication.journal_or_conference_name|default:"—" }}</td><td>{{ publication.publication_date|date:"Y-m-d"|default:"—" }}</td><td>{% for index in publication.indices.all %}{{ index.display_name }}{% if not forloop.last %}、{% endif %}{% empty %}—{% endfor %}</td><td>{% for field in publication.research_fields.all %}{{ field.display_name }}{% if not forloop.last %}、{% endif %}{% empty %}—{% endfor %}</td><td>{{ publication.language }}</td><td>{{ publication.doi|default:"—" }}</td></tr>{% empty %}<tr><td colspan="9" class="text-center text-muted py-4">沒有符合條件的公開成果。</td></tr>{% endfor %}</tbody></table></div></section>
+{% include "_pagination.html" %}
+{% endblock %}
