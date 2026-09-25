@@ -6,6 +6,9 @@ from .models import Role, User, UserRole
 @admin.register(User)
 class AuditedUserAdmin(AuditedAdminMixin, UserAdmin):
     audit_label = "account"
+    list_display = ("username", "email", "first_name", "last_name", "is_staff", "last_login")
+    ordering = ("-last_login", "username")
+    readonly_fields = ("last_login", "date_joined")
     def has_delete_permission(self, request, obj=None): return False
 
 
