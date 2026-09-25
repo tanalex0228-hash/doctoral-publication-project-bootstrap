@@ -3,6 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from publications.permissions import is_advisor_actor, is_staff_actor
 
@@ -15,6 +17,8 @@ def _post_login_destination(user):
     return "dashboard:student"
 
 
+@never_cache
+@ensure_csrf_cookie
 def login_view(request):
     if request.user.is_authenticated:
         return redirect(_post_login_destination(request.user))
