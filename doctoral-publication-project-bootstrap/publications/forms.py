@@ -1,4 +1,7 @@
+import re
+
 from django import forms
+from django.core.exceptions import ValidationError
 from .models import PublicationAuthor, PublicationRecord
 from taxonomy.models import PublicationIndex, PublicationType, ResearchField
 
@@ -30,6 +33,20 @@ class PublicationForm(BootstrapFormMixin, forms.ModelForm):
         if self.instance and self.instance.pk:
             self.initial["indices"] = self.instance.indices.all()
             self.initial["research_fields"] = self.instance.research_fields.all()
+
+    def clean_issn(self):
+        """Accept a conventional ISSN only when its ISO 3297 check digit is valid."""
+        value = (self.cleaned_data.get("issn") or "").strip().upper().replace(" ", "")
+        if not value:
+            return None
+        compact = value.replace("-", "")
+        if not re.fullmatch(r"\d{7}[\dX]", compact):
+            raise ValidationError("ISSN 格式應為 1234-567X。")
+        expected = (11 - sum(int(digit) * weight for digit, weight in zip(compact[:7], range(8, 1, -1))) % 11) % 11
+        check_digit = 10 if compact[-1] == "X" else int(compact[-1])
+        if check_digit != expected:
+            raise ValidationError("ISSN 檢查碼無效。")
+        return f"{compact[:4]}-{compact[4:]}"
 
 
 class PublicationAuthorForm(BootstrapFormMixin, forms.ModelForm):

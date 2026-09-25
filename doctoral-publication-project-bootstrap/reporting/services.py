@@ -2,11 +2,12 @@ from django.contrib.postgres.aggregates import StringAgg
 from django.db.models import Count, F, Max, Min, Q
 from doctoral_students.models import DoctoralStudentProfile
 from publications.models import PublicationRecord
+from publications.querysets import official_publications
 
 
 def approved_publications():
-    """The sole official-statistics universe; never accept a client-supplied approval flag."""
-    return PublicationRecord.objects.filter(workflow_status=PublicationRecord.WorkflowStatus.APPROVED)
+    """Compatibility name for the single valid-official-results contract."""
+    return official_publications()
 
 
 def filtered_approved_publications(*, student=None, year=None, publication_type=None,
@@ -73,6 +74,16 @@ def student_summary(student):
         "conference_total": records.filter(publication_type__slug="conference").count(),
         "first_author_total": author_records.filter(authors__author_order=1).distinct().count(),
         "corresponding_author_total": author_records.filter(authors__is_corresponding_author=True).distinct().count(),
+        "advisor_coauthored_total": records.filter(
+            authors__linked_professor__student_relations__student=student,
+            authors__linked_professor__student_relations__is_active=True,
+        ).distinct().count(),
+        "publication_index_counts": records.filter(indices__isnull=False).values(
+            "indices__display_name"
+        ).annotate(total=Count("pk", distinct=True)).order_by("indices__display_name"),
+        "yearly_publications": records.filter(publication_date__isnull=False).values(
+            "publication_date__year"
+        ).annotate(total=Count("pk", distinct=True)).order_by("-publication_date__year"),
         "latest_approved_at": records.aggregate(value=Max("approved_at"))["value"],
     }
 
@@ -103,6 +114,24 @@ def student_statistics_table(records, sort="name"):
         conference_total=Count(
             "publications",
             filter=record_filter & Q(publications__publication_type__slug="conference"),
+            distinct=True,
+        ),
+        first_author_total=Count(
+            "publications",
+            filter=record_filter & Q(publications__authors__author_order=1, publications__authors__linked_user=F("user")),
+            distinct=True,
+        ),
+        corresponding_author_total=Count(
+            "publications",
+            filter=record_filter & Q(publications__authors__is_corresponding_author=True, publications__authors__linked_user=F("user")),
+            distinct=True,
+        ),
+        advisor_coauthored_total=Count(
+            "publications",
+            filter=record_filter & Q(
+                publications__authors__linked_professor=F("advisor_relations__professor"),
+                advisor_relations__is_active=True,
+            ),
             distinct=True,
         ),
         publication_index_summary=StringAgg(

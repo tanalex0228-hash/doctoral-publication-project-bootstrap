@@ -19,7 +19,9 @@ Use Django Admin to create, rename, order, activate, or deactivate Publication T
 2. Approve or return through the review action. Do not edit `workflow_status` directly in Admin, forms, or the database.
 3. For approved records, configure publishing state and visibility independently. Approval does not make a record public.
 4. Use Statistics and CSV only as approved-only operational evidence; they are not a graduation-decision engine.
-5. Archive only approved records when appropriate. Archive preserves workflow/review/audit history and has no restore action.
+5. Archive only the current approved record when appropriate. Archive preserves valid formal-history/statistics status while removing it from active/public surfaces.
+6. Use the explicit revoke-approval action only for a governance correction. It requires a reason and confirmation, removes formal eligibility, and preserves ReviewDecision, transition, and audit evidence.
+7. An approved record is corrected by creating a pending revision; do not move the current official record back to an editable state.
 
 ## Health and basic troubleshooting
 

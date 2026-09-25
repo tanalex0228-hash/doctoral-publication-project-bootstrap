@@ -11,4 +11,5 @@ urlpatterns = [
     path("<uuid:publication_id>/authors/<uuid:author_id>/delete/", views.author_delete, name="author_delete"),
     path("<uuid:publication_id>/authors/<uuid:author_id>/move/<str:direction>/", views.author_move, name="author_move"),
     path("<uuid:publication_id>/submit/", views.publication_submit, name="submit"),
+    path("<uuid:publication_id>/revisions/new/", views.publication_revision_create, name="revision_create"),
 ]

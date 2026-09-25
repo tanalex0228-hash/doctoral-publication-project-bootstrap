@@ -7,6 +7,7 @@ from doctoral_students.models import DoctoralStudentProfile
 from professors.models import Professor
 from publications.models import PublicationRecord
 from publications.permissions import is_advisor_actor, visible_publications_for
+from publications.querysets import official_publications
 
 
 @login_required
@@ -22,7 +23,7 @@ def student_dashboard(request):
         "drafts": publications.filter(workflow_status=statuses.DRAFT),
         "submitted": publications.filter(workflow_status=statuses.SUBMITTED),
         "returned": publications.filter(workflow_status=statuses.RETURNED),
-        "approved": publications.filter(workflow_status=statuses.APPROVED),
+        "approved": official_publications().filter(owner_student=student),
     })
 
 

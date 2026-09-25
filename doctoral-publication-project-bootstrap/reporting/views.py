@@ -17,6 +17,7 @@ from .services import (
     filtered_approved_publications,
     statistics_overview,
     student_statistics_table,
+    student_summary,
 )
 
 
@@ -67,6 +68,7 @@ def student_statistics_detail(request, student_id):
     return render(request, "statistics/student_detail.html", {
         "student": student,
         "publications": publications,
+        "summary": student_summary(student),
     })
 
 

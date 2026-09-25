@@ -17,6 +17,21 @@ def normalize_doi(value):
     return value or None
 
 
+class PublicationSeries(models.Model):
+    """One logical scholarly result with one optionally current official version."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner_student = models.ForeignKey("doctoral_students.DoctoralStudentProfile", on_delete=models.PROTECT, related_name="publication_series")
+    current_official_version = models.ForeignKey(
+        "PublicationRecord", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="current_for_series",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["owner_student", "current_official_version"], name="idx_series_official")]
+
+
 class PublicationRecord(models.Model):
     class WorkflowStatus(models.TextChoices):
         DRAFT = "draft", "草稿"
@@ -25,10 +40,13 @@ class PublicationRecord(models.Model):
         APPROVED = "approved", "已核准"
         ARCHIVED = "archived", "已封存"
         WITHDRAWN = "withdrawn", "已撤回"
+        REVOKED = "revoked", "已撤銷核准"
 
     class VisibilityScope(models.TextChoices):
         PUBLIC = "public", "公開"
-        DEPARTMENT = "department", "系所內"
+        DEPARTMENT_ALL = "department_all", "系所全體"
+        DEPARTMENT_CURRENT = "department_current", "系所在學"
+        OWNER_FACULTY = "owner_faculty", "本人與全體教職員"
         OWNER_ADVISOR = "owner_advisor", "本人與指導教授"
         STAFF_ONLY = "staff_only", "工作人員限定"
 
@@ -39,6 +57,8 @@ class PublicationRecord(models.Model):
         PUBLISHED = "published", "正式發表"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    series = models.ForeignKey(PublicationSeries, on_delete=models.PROTECT, related_name="versions")
+    is_revision = models.BooleanField(default=False, db_index=True)
     owner_student = models.ForeignKey("doctoral_students.DoctoralStudentProfile", on_delete=models.PROTECT, related_name="publications")
     publication_type = models.ForeignKey("taxonomy.PublicationType", on_delete=models.PROTECT, related_name="publications")
     title = models.CharField(max_length=500, db_index=True)
@@ -58,10 +78,12 @@ class PublicationRecord(models.Model):
     publication_date = models.DateField(null=True, blank=True, db_index=True)
     workflow_status = models.CharField(max_length=16, choices=WorkflowStatus.choices, default=WorkflowStatus.DRAFT, db_index=True)
     is_published = models.BooleanField(default=False, db_index=True)
-    visibility_scope = models.CharField(max_length=16, choices=VisibilityScope.choices, default=VisibilityScope.OWNER_ADVISOR, db_index=True)
+    visibility_scope = models.CharField(max_length=24, choices=VisibilityScope.choices, default=VisibilityScope.OWNER_ADVISOR, db_index=True)
     submitted_at = models.DateTimeField(null=True, blank=True, db_index=True)
     approved_at = models.DateTimeField(null=True, blank=True, db_index=True)
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="approved_publications")
+    approval_revoked_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    approval_revoked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="revoked_publications")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_publications")
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="updated_publications")
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -74,8 +96,16 @@ class PublicationRecord(models.Model):
             models.Index(fields=["owner_student", "workflow_status"], name="idx_owner_status"),
             models.Index(fields=["workflow_status", "publication_date", "publication_type"], name="idx_staff_stats"),
             models.Index(fields=["workflow_status", "is_published", "visibility_scope"], name="idx_public_gate"),
+            models.Index(fields=["series", "workflow_status"], name="idx_series_status"),
         ]
-        constraints = [models.UniqueConstraint(fields=["normalized_doi"], condition=Q(normalized_doi__isnull=False), name="uq_doi_normalized")]
+        constraints = [
+            models.UniqueConstraint(fields=["normalized_doi"], condition=Q(normalized_doi__isnull=False), name="uq_doi_normalized"),
+            models.UniqueConstraint(
+                fields=["series"],
+                condition=Q(is_revision=True, workflow_status__in=["draft", "submitted", "returned"]),
+                name="uq_pending_revision_series",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         self.normalized_title = normalize_text(self.title)
@@ -83,7 +113,7 @@ class PublicationRecord(models.Model):
         super().save(*args, **kwargs)
 
     def clean(self):
-        if self.is_published and self.workflow_status != self.WorkflowStatus.APPROVED:
+        if self.is_published and self.workflow_status not in {self.WorkflowStatus.APPROVED, self.WorkflowStatus.ARCHIVED}:
             raise ValidationError("Only approved publications may be published on the platform.")
 
     def __str__(self): return self.title

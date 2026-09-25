@@ -9,7 +9,8 @@ from doctoral_students.models import DoctoralStudentProfile
 from .forms import PublicationAuthorForm, PublicationForm, author_form_values, publication_form_values
 from .models import PublicationAuthor, PublicationRecord
 from .permissions import can_edit_publication
-from .services import add_author, create_student_publication, delete_author, move_author, submit_publication, update_author, update_publication
+from .querysets import is_official_publication
+from .services import add_author, create_revision, create_student_publication, delete_author, move_author, submit_publication, update_author, update_publication
 
 
 def _student_for(request):
@@ -54,6 +55,7 @@ def publication_detail(request, publication_id):
         "latest_return": latest_return,
         "documents": publication.documents.filter(is_active=True),
         "document_upload_form": DocumentUploadForm(),
+        "can_create_revision": is_official_publication(publication) and publication.owner_student.user_id == request.user.id,
     })
 
 
@@ -135,3 +137,16 @@ def publication_submit(request, publication_id):
     else:
         messages.success(request, "成果已送交審核，等待秘書處理。")
     return redirect("publications:detail", publication_id=publication.id)
+
+
+@login_required
+@require_POST
+def publication_revision_create(request, publication_id):
+    publication = _owned_publication(request, publication_id)
+    try:
+        revision = create_revision(actor=request.user, publication_id=publication.id)
+    except (PermissionDenied, ValidationError) as error:
+        messages.error(request, "; ".join(getattr(error, "messages", [str(error)])))
+        return redirect("publications:detail", publication_id=publication.id)
+    messages.success(request, "已建立待審修訂版本；目前正式版本在修訂核准前不會改變。")
+    return redirect("publications:detail", publication_id=revision.id)

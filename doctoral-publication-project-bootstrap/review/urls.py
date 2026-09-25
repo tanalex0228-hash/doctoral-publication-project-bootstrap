@@ -9,5 +9,6 @@ urlpatterns = [
     path("publications/<uuid:publication_id>/approve/", views.approve, name="approve"),
     path("publications/<uuid:publication_id>/return/", views.return_publication, name="return_publication"),
     path("publications/<uuid:publication_id>/archive/", views.archive, name="archive"),
+    path("publications/<uuid:publication_id>/revoke-approval/", views.revoke, name="revoke"),
     path("publications/<uuid:publication_id>/settings/", views.publication_settings, name="settings"),
 ]

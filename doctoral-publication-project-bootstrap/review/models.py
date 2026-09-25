@@ -23,12 +23,13 @@ class ReviewDecision(models.Model):
         APPROVE = "approve", "核准"
         RETURN = "return", "退回"
         ARCHIVE = "archive", "封存"
+        REVOKE = "revoke", "撤銷核准"
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     publication = models.ForeignKey("publications.PublicationRecord", on_delete=models.PROTECT, related_name="review_decisions")
     action = models.CharField(max_length=16, choices=Action.choices, db_index=True)
     reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="review_decisions")
     reason = models.TextField(blank=True)
-    visibility_after = models.CharField(max_length=16, null=True, blank=True, db_index=True)
+    visibility_after = models.CharField(max_length=24, null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     class Meta:
         indexes = [models.Index(fields=["publication", "created_at"], name="idx_review_pub_time")]

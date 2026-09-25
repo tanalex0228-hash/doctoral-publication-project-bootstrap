@@ -35,6 +35,12 @@ class PublicPortalVerticalSliceTests(TestCase):
             display_name="Portal Owner",
             admission_year=112,
         )
+        DoctoralStudentProfile.objects.create(
+            user=self.department_user,
+            student_number="P002",
+            display_name="Department Student",
+            admission_year=112,
+        )
         self.public_record = self._approved_record(
             title="Public research result",
             visibility=PublicationRecord.VisibilityScope.PUBLIC,
@@ -47,7 +53,7 @@ class PublicPortalVerticalSliceTests(TestCase):
         )
         self.department_record = self._approved_record(
             title="Department only result",
-            visibility=PublicationRecord.VisibilityScope.DEPARTMENT,
+            visibility=PublicationRecord.VisibilityScope.DEPARTMENT_ALL,
             published=True,
         )
         self.owner_advisor = self._approved_record(

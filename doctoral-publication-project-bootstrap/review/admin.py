@@ -7,6 +7,7 @@ class PublicationTransitionAdmin(admin.ModelAdmin):
     readonly_fields = ("publication", "from_status", "to_status", "actor", "reason", "request_id", "created_at")
     def has_add_permission(self, request): return False
     def has_change_permission(self, request, obj=None): return request.method in {"GET", "HEAD"}
+    def has_delete_permission(self, request, obj=None): return False
 
 @admin.register(ReviewDecision)
 class ReviewDecisionAdmin(admin.ModelAdmin):
@@ -14,3 +15,4 @@ class ReviewDecisionAdmin(admin.ModelAdmin):
     readonly_fields = ("publication", "action", "reviewer", "reason", "visibility_after", "created_at")
     def has_add_permission(self, request): return False
     def has_change_permission(self, request, obj=None): return request.method in {"GET", "HEAD"}
+    def has_delete_permission(self, request, obj=None): return False

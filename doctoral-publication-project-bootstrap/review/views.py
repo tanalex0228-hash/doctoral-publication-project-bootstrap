@@ -8,11 +8,12 @@ from django.views.decorators.http import require_POST
 from config.pagination import paginate_queryset
 from publications.models import PublicationRecord
 from publications.permissions import is_staff_actor
+from publications.querysets import is_official_publication, official_publications
 from publications.services import set_published, set_visibility
 from taxonomy.models import PublicationType
-from .forms import PublicationSettingsForm, ReturnForRevisionForm
+from .forms import PublicationSettingsForm, ReturnForRevisionForm, RevokeApprovalForm
 from .models import PublicationTransition
-from .services import approve_publication, archive_publication, return_for_revision
+from .services import approve_publication, archive_publication, return_for_revision, revoke_approval
 
 
 def _require_review_role(request):
@@ -65,8 +66,13 @@ def review_detail(request, publication_id):
     return render(request, "review/review_detail.html", {
         "publication": publication,
         "return_form": ReturnForRevisionForm(),
+        "revoke_form": RevokeApprovalForm(),
         "can_decide": publication.workflow_status == PublicationRecord.WorkflowStatus.SUBMITTED,
-        "can_archive": publication.workflow_status == PublicationRecord.WorkflowStatus.APPROVED,
+        "can_archive": publication.workflow_status == PublicationRecord.WorkflowStatus.APPROVED and is_official_publication(publication),
+        "can_revoke": publication.workflow_status in {
+            PublicationRecord.WorkflowStatus.APPROVED,
+            PublicationRecord.WorkflowStatus.ARCHIVED,
+        } and is_official_publication(publication),
     })
 
 
@@ -112,7 +118,25 @@ def archive(request, publication_id):
     except (PermissionDenied, ValidationError) as error:
         messages.error(request, "; ".join(getattr(error, "messages", [str(error)])))
     else:
-        messages.success(request, "成果已封存；不再出現在一般審核、公開與正式統計清單。")
+        messages.success(request, "成果已封存；保留正式歷史統計，但不再出現在 active/public surfaces。")
+    return redirect("review:detail", publication_id=publication.id)
+
+
+@login_required
+@require_POST
+def revoke(request, publication_id):
+    _require_review_role(request)
+    publication = get_object_or_404(PublicationRecord.objects.all(), pk=publication_id)
+    form = RevokeApprovalForm(request.POST)
+    if form.is_valid():
+        try:
+            revoke_approval(actor=request.user, publication_id=publication.id, reason=form.cleaned_data["reason"])
+        except (PermissionDenied, ValidationError) as error:
+            messages.error(request, "; ".join(getattr(error, "messages", [str(error)])))
+        else:
+            messages.success(request, "已撤銷核准；完整審核與稽核歷史已保留。")
+    else:
+        messages.error(request, "請填寫撤銷原因並完成確認。")
     return redirect("review:detail", publication_id=publication.id)
 
 
@@ -140,7 +164,11 @@ def archive_list(request):
 @login_required
 def publication_settings(request, publication_id):
     _require_review_role(request)
-    publication = get_object_or_404(PublicationRecord.objects.all(), pk=publication_id, workflow_status=PublicationRecord.WorkflowStatus.APPROVED)
+    publication = get_object_or_404(
+        official_publications(),
+        pk=publication_id,
+        workflow_status=PublicationRecord.WorkflowStatus.APPROVED,
+    )
     if request.method == "POST":
         form = PublicationSettingsForm(request.POST)
         if form.is_valid():

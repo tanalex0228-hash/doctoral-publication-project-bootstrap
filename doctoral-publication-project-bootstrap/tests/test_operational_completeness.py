@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.contrib import admin
 from django.test import TestCase
+from django.test.client import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
@@ -13,7 +14,7 @@ from config.pagination import DEFAULT_PAGE_SIZE
 from documents.models import SourceDocument
 from doctoral_students.models import DoctoralStudentProfile
 from professors.models import Professor
-from publications.models import PublicationAuthor, PublicationRecord
+from publications.models import PublicationAuthor, PublicationRecord, PublicationSeries
 from publications.services import create_publication, set_published, set_visibility, submit_publication
 from reporting.services import approved_publications
 from review.services import approve_publication
@@ -79,7 +80,7 @@ class ArchiveAndCsvTests(ContractFixture):
         publication = self.approved_publication()
         self.client.force_login(self.admin)
         self.client.post(reverse("review:archive", args=[publication.id]))
-        self.assertNotIn(publication.id, approved_publications().values_list("id", flat=True))
+        self.assertIn(publication.id, approved_publications().values_list("id", flat=True))
         self.assertNotContains(self.client.get(reverse("review:queue")), publication.title)
         self.assertContains(self.client.get(reverse("review:archive_list")), publication.title)
         self.assertEqual(self.client.get(reverse("public_site:publication_detail", args=[publication.id])).status_code, 404)
@@ -129,6 +130,22 @@ class ArchiveAndCsvTests(ContractFixture):
         self.assertEqual(admin.site._registry[PublicationIndex].list_editable, ("is_active", "display_order"))
         self.assertEqual(admin.site._registry[ResearchField].list_display, ("display_name", "slug", "is_active", "display_order"))
 
+    def test_admin_cannot_delete_or_mutate_immutable_governance_evidence(self):
+        from audit.models import AuditLog
+        from review.models import PublicationTransition, ReviewDecision
+
+        request = RequestFactory().post("/admin/")
+        evidence_admins = (
+            admin.site._registry[SourceDocument],
+            admin.site._registry[PublicationTransition],
+            admin.site._registry[ReviewDecision],
+            admin.site._registry[AuditLog],
+        )
+        for model_admin in evidence_admins:
+            self.assertFalse(model_admin.has_delete_permission(request))
+        self.assertFalse(admin.site._registry[SourceDocument].has_change_permission(request))
+        self.assertIn("is_active", admin.site._registry[SourceDocument].readonly_fields)
+
 
 class PaginationTests(ContractFixture):
     def setUp(self):
@@ -140,7 +157,9 @@ class PaginationTests(ContractFixture):
 
     def _make_public_records(self, count):
         for number in range(count):
-            PublicationRecord.objects.create(
+            series = PublicationSeries.objects.create(owner_student=self.student)
+            publication = PublicationRecord.objects.create(
+                series=series,
                 owner_student=self.student,
                 publication_type=self.type,
                 title=f"Paginated Public {number:02d}",
@@ -151,6 +170,8 @@ class PaginationTests(ContractFixture):
                 created_by=self.student_user,
                 updated_by=self.student_user,
             )
+            series.current_official_version = publication
+            series.save(update_fields=["current_official_version", "updated_at"])
 
     def test_public_department_advisor_and_export_lists_paginate_safely_and_keep_query(self):
         public_page_one = self.client.get(reverse("public_site:publication_list"), {"q": "Paginated Public", "page": 1})
@@ -174,6 +195,7 @@ class PaginationTests(ContractFixture):
     def test_review_queue_pagination_preserves_sort_and_has_safe_last_page(self):
         for number in range(DEFAULT_PAGE_SIZE + 1):
             PublicationRecord.objects.create(
+                series=PublicationSeries.objects.create(owner_student=self.student),
                 owner_student=self.student,
                 publication_type=self.type,
                 title=f"Paginated submitted {number:02d}",

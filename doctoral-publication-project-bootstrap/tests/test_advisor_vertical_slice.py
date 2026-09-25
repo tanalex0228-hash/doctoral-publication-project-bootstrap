@@ -79,8 +79,10 @@ class AdvisorVerticalSliceTests(ContractFixture):
         department.title = "Department record"
         department.workflow_status = PublicationRecord.WorkflowStatus.APPROVED
         department.is_published = True
-        department.visibility_scope = PublicationRecord.VisibilityScope.DEPARTMENT
+        department.visibility_scope = PublicationRecord.VisibilityScope.DEPARTMENT_ALL
         department.save()
+        department.series.current_official_version = department
+        department.series.save(update_fields=["current_official_version", "updated_at"])
         # The advisor screen intentionally keeps advisor visibility even for a
         # multi-role account; staff-only access belongs to the staff workflow.
         UserRole.objects.create(user=self.advisor_a_user, role=self.staff_role)
@@ -121,3 +123,55 @@ class AdvisorVerticalSliceTests(ContractFixture):
                 self.assertEqual(self.client.get(reverse("documents:download", args=[document.id])).status_code, 200)
                 self.client.force_login(self.advisor_b_user)
                 self.assertEqual(self.client.get(reverse("documents:download", args=[document.id])).status_code, 404)
+
+    def test_document_download_cannot_bypass_staff_only_parent_visibility(self):
+        with TemporaryDirectory() as directory:
+            with override_settings(MEDIA_ROOT=Path(directory)):
+                self.own_publication.visibility_scope = PublicationRecord.VisibilityScope.STAFF_ONLY
+                self.own_publication.save(update_fields=["visibility_scope"])
+                document = upload_document(
+                    actor=self.student_user,
+                    publication=self.own_publication,
+                    upload=SimpleUploadedFile("staff-only.pdf", b"%PDF-1.4 evidence", content_type="application/pdf"),
+                )
+                self.client.force_login(self.advisor_a_user)
+                self.assertEqual(self.client.get(reverse("documents:download", args=[document.id])).status_code, 404)
+                self.client.force_login(self.student_user)
+                self.assertEqual(self.client.get(reverse("documents:download", args=[document.id])).status_code, 200)
+                self.client.force_login(self.staff)
+                self.assertEqual(self.client.get(reverse("documents:download", args=[document.id])).status_code, 200)
+
+    def test_archived_advisor_cannot_download_document_through_active_relation(self):
+        with TemporaryDirectory() as directory:
+            with override_settings(MEDIA_ROOT=Path(directory)):
+                document = upload_document(
+                    actor=self.student_user,
+                    publication=self.own_publication,
+                    upload=SimpleUploadedFile("archived-advisor.pdf", b"%PDF-1.4 evidence", content_type="application/pdf"),
+                )
+                self.advisor_a.status = Professor.Status.ARCHIVED
+                self.advisor_a.save(update_fields=["status"])
+                self.client.force_login(self.advisor_a_user)
+                self.assertEqual(self.client.get(reverse("documents:download", args=[document.id])).status_code, 404)
+
+    def test_inactive_replaced_document_uuid_is_not_downloadable(self):
+        with TemporaryDirectory() as directory:
+            with override_settings(MEDIA_ROOT=Path(directory)):
+                original = upload_document(
+                    actor=self.student_user,
+                    publication=self.own_publication,
+                    upload=SimpleUploadedFile("original.pdf", b"%PDF-1.4 original", content_type="application/pdf"),
+                )
+                replacement = upload_document(
+                    actor=self.student_user,
+                    publication=self.own_publication,
+                    upload=SimpleUploadedFile("replacement.pdf", b"%PDF-1.4 replacement", content_type="application/pdf"),
+                    supersedes=original,
+                )
+                original.refresh_from_db()
+                self.assertFalse(original.is_active)
+                for user in (self.student_user, self.staff, self.advisor_a_user):
+                    self.client.force_login(user)
+                    self.assertEqual(self.client.get(reverse("documents:download", args=[original.id])).status_code, 404)
+                self.client.force_login(self.advisor_a_user)
+                self.assertEqual(self.client.get(reverse("documents:download", args=[replacement.id])).status_code, 200)

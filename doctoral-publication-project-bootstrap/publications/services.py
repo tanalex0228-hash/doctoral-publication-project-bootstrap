@@ -5,7 +5,8 @@ from django.db.models import Max
 from django.utils import timezone
 from audit.services import record_event
 from review.services import record_transition
-from .models import PublicationAuthor, PublicationRecord
+from .models import PublicationAuthor, PublicationRecord, PublicationSeries
+from .querysets import is_official_publication
 from .permissions import can_edit_publication, is_staff_actor
 
 
@@ -15,7 +16,8 @@ def _request_id(request_id): return request_id or str(uuid.uuid4())
 @transaction.atomic
 def create_publication(*, actor, owner_student, request_id=None, **fields):
     if not (is_staff_actor(actor) or owner_student.user_id == actor.id): raise PermissionDenied("Cannot create for another student.")
-    publication = PublicationRecord.objects.create(owner_student=owner_student, created_by=actor, updated_by=actor, **fields)
+    series = PublicationSeries.objects.create(owner_student=owner_student)
+    publication = PublicationRecord.objects.create(series=series, owner_student=owner_student, created_by=actor, updated_by=actor, **fields)
     record_transition(publication=publication, actor=actor, from_status="", to_status=PublicationRecord.WorkflowStatus.DRAFT, request_id=_request_id(request_id))
     record_event(actor=actor, action="publication.created", target=publication, request_id=request_id)
     return publication
@@ -39,6 +41,58 @@ def create_student_publication(*, actor, owner_student, indices=(), research_fie
     publication = create_publication(actor=actor, owner_student=owner_student, request_id=request_id, **fields)
     _set_taxonomies(publication, indices=indices, research_fields=research_fields)
     return publication
+
+
+@transaction.atomic
+def create_revision(*, actor, publication_id, request_id=None):
+    """Create a pending relational revision without mutating the official version."""
+    official = PublicationRecord.objects.select_related("series", "owner_student").select_for_update().get(pk=publication_id)
+    series = PublicationSeries.objects.select_for_update().get(pk=official.series_id)
+    if official.owner_student.user_id != actor.id or not is_official_publication(official):
+        raise PermissionDenied("Only the owner may revise the current official version.")
+    if series.versions.filter(
+        is_revision=True,
+        workflow_status__in={
+            PublicationRecord.WorkflowStatus.DRAFT,
+            PublicationRecord.WorkflowStatus.SUBMITTED,
+            PublicationRecord.WorkflowStatus.RETURNED,
+        },
+    ).exists():
+        raise ValidationError("An editable or submitted revision already exists for this publication.")
+    values = {field: getattr(official, field) for field in STUDENT_EDITABLE_FIELDS}
+    revision = PublicationRecord.objects.create(
+        series=series,
+        is_revision=True,
+        owner_student=official.owner_student,
+        created_by=actor,
+        updated_by=actor,
+        visibility_scope=official.visibility_scope,
+        is_published=False,
+        **values,
+    )
+    revision.indices.set(official.indices.all())
+    revision.research_fields.set(official.research_fields.all())
+    for author in official.authors.all():
+        PublicationAuthor.objects.create(
+            publication=revision,
+            display_name=author.display_name,
+            affiliation=author.affiliation,
+            author_order=author.author_order,
+            is_corresponding_author=author.is_corresponding_author,
+            linked_user=author.linked_user,
+            linked_professor=author.linked_professor,
+            orcid=author.orcid,
+        )
+    rid = _request_id(request_id)
+    record_transition(publication=revision, actor=actor, from_status="", to_status=PublicationRecord.WorkflowStatus.DRAFT, request_id=rid)
+    record_event(
+        actor=actor,
+        action="publication.revision_created",
+        target=revision,
+        request_id=rid,
+        metadata={"official_version_id": str(official.id)},
+    )
+    return revision
 
 
 @transaction.atomic
@@ -128,7 +182,10 @@ def validate_submission_completeness(publication):
         errors.append("請選擇成果類型。")
     if not publication.authors.exists():
         errors.append("請至少新增一位作者。")
-    if not publication.documents.filter(is_active=True).exists():
+    has_evidence = publication.documents.filter(is_active=True).exists()
+    if publication.is_revision and publication.series.current_official_version_id:
+        has_evidence = has_evidence or publication.series.current_official_version.documents.filter(is_active=True).exists()
+    if not has_evidence:
         errors.append("請至少上傳一份有效佐證文件。")
     return errors
 
