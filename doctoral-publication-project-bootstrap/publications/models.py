@@ -30,6 +30,8 @@ class PublicationSeries(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["owner_student", "current_official_version"], name="idx_series_official")]
+        verbose_name = "成果系列"
+        verbose_name_plural = "成果系列"
 
 
 class PublicationRecord(models.Model):
@@ -106,6 +108,8 @@ class PublicationRecord(models.Model):
                 name="uq_pending_revision_series",
             ),
         ]
+        verbose_name = "成果紀錄"
+        verbose_name_plural = "成果紀錄"
 
     def save(self, *args, **kwargs):
         self.normalized_title = normalize_text(self.title)
@@ -134,6 +138,8 @@ class PublicationAuthor(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["publication", "author_order"], name="uq_author_order"), models.CheckConstraint(condition=Q(author_order__gte=1), name="ck_author_order_positive")]
         ordering = ["author_order"]
+        verbose_name = "成果作者"
+        verbose_name_plural = "成果作者"
 
 
 class PublicationIndexAssignment(models.Model):
@@ -143,6 +149,8 @@ class PublicationIndexAssignment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=["publication", "index"], name="uq_publication_index")]
+        verbose_name = "成果索引對照"
+        verbose_name_plural = "成果索引對照"
 
 
 class PublicationFieldAssignment(models.Model):
@@ -152,3 +160,5 @@ class PublicationFieldAssignment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=["publication", "field"], name="uq_publication_field")]
+        verbose_name = "成果研究領域對照"
+        verbose_name_plural = "成果研究領域對照"

@@ -15,3 +15,5 @@ class AuditLog(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["target_type", "target_id", "created_at"], name="idx_audit_target_time"), models.Index(fields=["actor", "created_at"], name="idx_audit_actor_time")]
+        verbose_name = "稽核紀錄"
+        verbose_name_plural = "稽核紀錄"

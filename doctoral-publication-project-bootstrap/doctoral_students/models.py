@@ -21,4 +21,8 @@ class DoctoralStudentProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        verbose_name = "博士生"
+        verbose_name_plural = "博士生"
+
     def __str__(self): return f"{self.student_number} {self.display_name}"

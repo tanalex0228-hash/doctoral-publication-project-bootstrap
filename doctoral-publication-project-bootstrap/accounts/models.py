@@ -11,6 +11,8 @@ class User(AbstractUser):
 
     class Meta:
         constraints = [models.UniqueConstraint(Lower("email"), name="uq_user_email_ci")]
+        verbose_name = "使用者"
+        verbose_name_plural = "使用者"
 
     def has_project_role(self, *slugs):
         return self.is_active and self.user_roles.filter(role__slug__in=slugs, role__is_active=True).exists()
@@ -21,6 +23,10 @@ class Role(models.Model):
     slug = models.SlugField(unique=True)
     display_name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        verbose_name = "角色"
+        verbose_name_plural = "角色"
 
     def __str__(self):
         return self.display_name
@@ -35,3 +41,5 @@ class UserRole(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "role"], name="uq_user_role")]
+        verbose_name = "使用者角色"
+        verbose_name_plural = "使用者角色"

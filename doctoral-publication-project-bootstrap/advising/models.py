@@ -18,6 +18,8 @@ class StudentAdvisor(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["student", "is_active"], name="idx_student_active")]
+        verbose_name = "學生指導關係"
+        verbose_name_plural = "學生指導關係"
 
     def clean(self):
         if self.start_date and self.end_date and self.end_date < self.start_date:

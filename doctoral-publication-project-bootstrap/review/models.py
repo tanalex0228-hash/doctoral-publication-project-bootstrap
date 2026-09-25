@@ -16,6 +16,8 @@ class PublicationTransition(models.Model):
     class Meta:
         constraints = [models.CheckConstraint(condition=~Q(from_status=F("to_status")), name="ck_status_change")]
         indexes = [models.Index(fields=["publication", "created_at"], name="idx_pub_created")]
+        verbose_name = "成果狀態轉換"
+        verbose_name_plural = "成果狀態轉換"
 
 
 class ReviewDecision(models.Model):
@@ -33,3 +35,5 @@ class ReviewDecision(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     class Meta:
         indexes = [models.Index(fields=["publication", "created_at"], name="idx_review_pub_time")]
+        verbose_name = "審核決定"
+        verbose_name_plural = "審核決定"

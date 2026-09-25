@@ -18,6 +18,19 @@ class TaxonomyBase(models.Model):
         return self.display_name
 
 
-class PublicationType(TaxonomyBase): pass
-class PublicationIndex(TaxonomyBase): pass
-class ResearchField(TaxonomyBase): pass
+class PublicationType(TaxonomyBase):
+    class Meta(TaxonomyBase.Meta):
+        verbose_name = "成果類型"
+        verbose_name_plural = "成果類型"
+
+
+class PublicationIndex(TaxonomyBase):
+    class Meta(TaxonomyBase.Meta):
+        verbose_name = "成果索引"
+        verbose_name_plural = "成果索引"
+
+
+class ResearchField(TaxonomyBase):
+    class Meta(TaxonomyBase.Meta):
+        verbose_name = "研究領域"
+        verbose_name_plural = "研究領域"

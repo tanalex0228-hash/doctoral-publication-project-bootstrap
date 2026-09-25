@@ -28,6 +28,8 @@ class SourceDocument(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["publication", "checksum_sha256"], name="uq_publication_checksum"), models.CheckConstraint(condition=models.Q(file_size__gt=0), name="ck_document_size_positive")]
         indexes = [models.Index(fields=["publication", "is_active"], name="idx_doc_publication_active")]
+        verbose_name = "佐證文件"
+        verbose_name_plural = "佐證文件"
 
     def save(self, *args, **kwargs):
         if self.pk and not self._state.adding:
