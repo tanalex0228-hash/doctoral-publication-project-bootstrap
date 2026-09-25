@@ -1,0 +1,15 @@
+services:
+  app:
+    build: ../..
+    restart: unless-stopped
+    env_file: .env
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile - --error-logfile - --capture-output --timeout 60
+    ports:
+      - "192.168.50.10:18082:8000"
+    volumes:
+      - doctoral_private_media:/var/lib/doctoral-private-media
+      - ./staticfiles:/var/lib/doctoral-static
+
+volumes:
+  doctoral_private_media:
+    name: doctoral_app_private_media

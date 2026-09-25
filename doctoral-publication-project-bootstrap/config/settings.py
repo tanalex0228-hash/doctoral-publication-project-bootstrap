@@ -92,13 +92,22 @@ LANGUAGE_CODE = "zh-hant"
 TIME_ZONE = "Asia/Taipei"
 USE_I18N = True
 USE_TZ = True
-STATIC_URL = "static/"
+FORCE_SCRIPT_NAME = os.environ.get("DJANGO_FORCE_SCRIPT_NAME") or None
+STATIC_URL = os.environ.get("DJANGO_STATIC_URL", "static/")
 STATIC_ROOT = Path(os.environ.get("STATIC_ROOT", BASE_DIR / "staticfiles"))
 # No MEDIA_URL: evidence files are private and served only by permission-checked views.
 MEDIA_ROOT = Path(os.environ.get("PRIVATE_MEDIA_ROOT", BASE_DIR / "private_media"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "dashboard:student"
+
+# A path-mounted deployment can share a hostname with another Django site.
+# These defaults preserve standalone deployments; production may scope them
+# through environment variables without changing application behavior.
+SESSION_COOKIE_NAME = os.environ.get("DJANGO_SESSION_COOKIE_NAME", "sessionid")
+CSRF_COOKIE_NAME = os.environ.get("DJANGO_CSRF_COOKIE_NAME", "csrftoken")
+SESSION_COOKIE_PATH = os.environ.get("DJANGO_SESSION_COOKIE_PATH", "/")
+CSRF_COOKIE_PATH = os.environ.get("DJANGO_CSRF_COOKIE_PATH", "/")
 
 # TLS is terminated by the deployment proxy. These options stay opt-in for
 # local HTTP development but are mandatory once DJANGO_ENV=production.
