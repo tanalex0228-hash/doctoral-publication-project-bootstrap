@@ -31,5 +31,6 @@ For production set `DJANGO_ENV=production`, `DJANGO_DEBUG=0`, HTTPS redirect/coo
 - [Backup and restore](docs/BACKUP_RESTORE.md)
 - [Operations guide](docs/OPERATIONS.md)
 - [UAT checklist](docs/UAT_CHECKLIST.md)
+- [UAT / staging environment](docs/UAT_ENVIRONMENT.md)
 
 The source of truth remains [AGENTS.md](AGENTS.md), `docs/Database_Field_Matrix.xlsx`, and the linked Notion project.

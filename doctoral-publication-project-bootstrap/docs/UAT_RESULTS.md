@@ -10,7 +10,8 @@
 | Date |  |
 | Application revision |  |
 | PostgreSQL version |  |
-| Result | Not started |
+| Automated pre-UAT | PASS — RC2 regression suite and deploy checks passed; repeat after UAT seed setup |
+| Human UAT | PENDING — do not mark PASS until a tester executes the scenarios |
 
 Do not use production records or real sensitive evidence. Use synthetic PDF/JPG/PNG files and dedicated accounts.
 
@@ -62,6 +63,8 @@ Severity: `BLOCKER`, `MAJOR`, `MINOR`, `COSMETIC`. Do not implement `NEW REQUEST
 | Did legacy `department` mean current + graduated students + faculty/staff? |  |
 | If no legacy production data exists | Record `Not Applicable` |
 | If policy/data differs | Stop release migration and obtain PM/data-owner decision; do not edit the migration casually |
+
+Current local/UAT baseline status: `Not Applicable — no production legacy dataset was supplied for this environment.`
 
 ## Production configuration checklist
 
