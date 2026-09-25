@@ -10,7 +10,7 @@
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
     <div class="container">
       <div class="d-flex align-items-center gap-3"><a class="navbar-brand mb-0" href="{% url 'accounts:home' %}">博士班成果管理</a><a class="link-light text-decoration-none small" href="{% url 'public_site:publication_list' %}">公開成果</a></div>
-      {% if user.is_authenticated %}<div class="d-flex align-items-center gap-2"><span class="navbar-text text-white">{{ user.username }}</span><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-light">登出</button></form></div>{% endif %}
+      {% if user.is_authenticated %}<div class="d-flex align-items-center gap-2"><span class="navbar-text text-white">{{ user.username }}</span>{% if user.is_staff %}<a class="btn btn-sm btn-warning" href="{% url 'admin:index' %}">Django 管理後台</a>{% endif %}<form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-light">登出</button></form></div>{% endif %}
     </div>
   </nav>
   <main class="container pb-5">
