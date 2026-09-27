@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}個人首頁｜博士班成果管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4"><div><h1 class="h3 mb-1">個人首頁</h1><p class="text-muted mb-0">{{ user.username }}{% if student %}・{{ student.display_name }}（{{ student.student_number }}）{% endif %}</p></div><a class="btn btn-outline-primary" href="{% url 'accounts:password_change' %}">變更密碼</a></div>
+{% if student %}
+  <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">我的成果</h2><a class="btn btn-sm btn-primary" href="{% url 'publications:create' %}">新增成果</a></div>
+  {% include "dashboard/_publication_group.html" with heading="草稿" publications=drafts badge="secondary" empty="目前沒有草稿。" %}
+  {% include "dashboard/_publication_group.html" with heading="待審核" publications=submitted badge="warning" empty="目前沒有待審核成果。" %}
+  {% include "dashboard/_publication_group.html" with heading="被退回" publications=returned badge="danger" empty="目前沒有被退回成果。" %}
+  {% include "dashboard/_publication_group.html" with heading="已核准成果" publications=approved badge="success" empty="目前沒有已核准成果。" %}
+{% else %}
+  <div class="alert alert-info">此帳號尚未連結學生資料。可使用下方入口前往已授權的系統功能。</div>
+  <a class="btn btn-primary" href="{% url home_destination %}">前往系統首頁</a>
+{% endif %}
+{% endblock %}
