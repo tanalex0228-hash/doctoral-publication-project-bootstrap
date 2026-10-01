@@ -143,6 +143,7 @@ class ArchiveAndCsvTests(ContractFixture):
         )
         for model_admin in evidence_admins:
             self.assertFalse(model_admin.has_delete_permission(request))
+        self.assertFalse(admin.site._registry[PublicationRecord].has_delete_permission(request))
         self.assertFalse(admin.site._registry[SourceDocument].has_change_permission(request))
         self.assertIn("is_active", admin.site._registry[SourceDocument].readonly_fields)
 

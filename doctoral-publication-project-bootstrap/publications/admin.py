@@ -30,6 +30,10 @@ class PublicationRecordAdmin(admin.ModelAdmin):
     inlines = (PublicationAuthorInline, JournalArticleDetailInline, ConferenceDetailInline)
     readonly_fields = ("normalized_title", "normalized_doi", "workflow_status", "is_published", "visibility_scope", "submitted_at", "approved_at", "approved_by")
 
+    def has_delete_permission(self, request, obj=None):
+        """Records are governed through the review/archive workflow, never hard-deleted."""
+        return False
+
 admin.site.register(PublicationIndexAssignment)
 admin.site.register(PublicationFieldAssignment)
 admin.site.register(PublicationSDGAssignment)
