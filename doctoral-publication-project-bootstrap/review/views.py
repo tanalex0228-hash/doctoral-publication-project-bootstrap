@@ -73,6 +73,10 @@ def review_detail(request, publication_id):
             PublicationRecord.WorkflowStatus.APPROVED,
             PublicationRecord.WorkflowStatus.ARCHIVED,
         } and is_official_publication(publication),
+        "can_configure_publication": publication.workflow_status in {
+            PublicationRecord.WorkflowStatus.APPROVED,
+            PublicationRecord.WorkflowStatus.ARCHIVED,
+        } and is_official_publication(publication),
     })
 
 
@@ -118,7 +122,7 @@ def archive(request, publication_id):
     except (PermissionDenied, ValidationError) as error:
         messages.error(request, "; ".join(getattr(error, "messages", [str(error)])))
     else:
-        messages.success(request, "成果已封存；保留正式歷史統計，但不再出現在 active/public surfaces。")
+        messages.success(request, "成果已封存；保留正式歷史統計。若維持已發佈且公開，仍可出現在公開成果頁。")
     return redirect("review:detail", publication_id=publication.id)
 
 
@@ -167,7 +171,10 @@ def publication_settings(request, publication_id):
     publication = get_object_or_404(
         official_publications(),
         pk=publication_id,
-        workflow_status=PublicationRecord.WorkflowStatus.APPROVED,
+        workflow_status__in=(
+            PublicationRecord.WorkflowStatus.APPROVED,
+            PublicationRecord.WorkflowStatus.ARCHIVED,
+        ),
     )
     if request.method == "POST":
         form = PublicationSettingsForm(request.POST)

@@ -152,7 +152,7 @@ Controls review lifecycle:
 
 ### Publishing state
 
-`is_published` (or equivalent) controls whether an approved record is exposed through a publication-facing surface.
+`is_published` (or equivalent) controls whether an approved or archived official record is exposed through a publication-facing surface. Archival preserves the official historical record and does not itself revoke a previously configured publication audience.
 
 ### Visibility state
 
@@ -163,7 +163,7 @@ Controls the audience:
 - owner_advisor;
 - staff_only.
 
-A valid record can therefore be approved but not published, or approved and published but visible only to owner/advisors/staff.
+A valid record can therefore be approved or archived but not published, or published but visible only to owner/advisors/staff.
 
 ## State-machine contract
 

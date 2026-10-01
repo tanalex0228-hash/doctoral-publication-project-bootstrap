@@ -76,14 +76,22 @@ class ArchiveAndCsvTests(ContractFixture):
         self.assertTrue(publication.review_decisions.filter(action="archive", reviewer=self.staff).exists())
         self.assertTrue(AuditLog.objects.filter(action="publication.archived", target_id=publication.id).exists())
 
-    def test_archived_record_leaves_active_surfaces_but_remains_in_archive_history(self):
+    def test_archived_official_record_can_remain_public_and_be_reconfigured(self):
         publication = self.approved_publication()
         self.client.force_login(self.admin)
         self.client.post(reverse("review:archive", args=[publication.id]))
         self.assertIn(publication.id, approved_publications().values_list("id", flat=True))
         self.assertNotContains(self.client.get(reverse("review:queue")), publication.title)
         self.assertContains(self.client.get(reverse("review:archive_list")), publication.title)
-        self.assertEqual(self.client.get(reverse("public_site:publication_detail", args=[publication.id])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("public_site:publication_detail", args=[publication.id])).status_code, 200)
+        settings = self.client.get(reverse("review:settings", args=[publication.id]))
+        self.assertEqual(settings.status_code, 200)
+        response = self.client.post(reverse("review:settings", args=[publication.id]), {
+            "is_published": "on",
+            "visibility_scope": PublicationRecord.VisibilityScope.PUBLIC,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.get(reverse("public_site:publication_detail", args=[publication.id])).status_code, 200)
 
     def test_archive_does_not_widen_private_document_permission(self):
         publication = self.approved_publication()

@@ -186,9 +186,8 @@ def visible_publications_for(user, *, include_staff_scope=True):
 
 
 def public_portal_publications():
-    """Only current, active official versions belong to the public surface."""
+    """Current official versions may remain public after administrative archival."""
     return official_publications().filter(
-        workflow_status=PublicationRecord.WorkflowStatus.APPROVED,
         is_published=True,
         visibility_scope=PublicationRecord.VisibilityScope.PUBLIC,
     )

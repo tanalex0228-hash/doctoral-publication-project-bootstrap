@@ -340,7 +340,11 @@ def withdraw_publication(*, actor, publication_id, request_id=None):
 @transaction.atomic
 def set_visibility(*, actor, publication_id, visibility_scope, request_id=None):
     publication = PublicationRecord.objects.select_for_update().get(pk=publication_id)
-    if not is_staff_actor(actor) or publication.workflow_status != PublicationRecord.WorkflowStatus.APPROVED: raise PermissionDenied("Only staff may set visibility for approved records.")
+    if not is_staff_actor(actor) or publication.workflow_status not in {
+        PublicationRecord.WorkflowStatus.APPROVED,
+        PublicationRecord.WorkflowStatus.ARCHIVED,
+    }:
+        raise PermissionDenied("Only staff may set visibility for approved or archived official records.")
     publication.visibility_scope, publication.updated_by = visibility_scope, actor
     publication.full_clean(); publication.save(update_fields=["visibility_scope", "updated_by", "updated_at"])
     record_event(actor=actor, action="publication.visibility_changed", target=publication, request_id=_request_id(request_id), metadata={"visibility_scope": visibility_scope})
@@ -350,7 +354,11 @@ def set_visibility(*, actor, publication_id, visibility_scope, request_id=None):
 @transaction.atomic
 def set_published(*, actor, publication_id, is_published, request_id=None):
     publication = PublicationRecord.objects.select_for_update().get(pk=publication_id)
-    if not is_staff_actor(actor) or publication.workflow_status != PublicationRecord.WorkflowStatus.APPROVED: raise PermissionDenied("Only staff may publish approved records.")
+    if not is_staff_actor(actor) or publication.workflow_status not in {
+        PublicationRecord.WorkflowStatus.APPROVED,
+        PublicationRecord.WorkflowStatus.ARCHIVED,
+    }:
+        raise PermissionDenied("Only staff may publish approved or archived official records.")
     publication.is_published, publication.updated_by = is_published, actor
     publication.full_clean(); publication.save(update_fields=["is_published", "updated_by", "updated_at"])
     record_event(actor=actor, action="publication.publish_changed", target=publication, request_id=_request_id(request_id), metadata={"is_published": is_published})
