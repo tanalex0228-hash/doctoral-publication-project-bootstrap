@@ -34,6 +34,7 @@ def publication_list(request):
         "detail_route": "public_site:publication_detail",
         "portal_title": "公開成果",
         "portal_note": "僅列出已核准、已發佈且設定為公開的成果 metadata。",
+        "can_access_department_portal": is_department_member(request.user),
     })
 
 
@@ -66,6 +67,7 @@ def department_publication_list(request):
         "detail_route": "public_site:department_detail",
         "portal_title": "系所成果",
         "portal_note": "僅列出已核准、已發佈且授權系所檢視的成果 metadata。",
+        "can_access_department_portal": True,
     })
 
 

@@ -150,7 +150,10 @@ class PublicPortalVerticalSliceTests(TestCase):
             200,
         )
         self.client.force_login(self.is_staff_only)
-        self.assertEqual(self.client.get(reverse("public_site:department_list")).status_code, 404)
+        denied = self.client.get(reverse("public_site:department_list"))
+        self.assertEqual(denied.status_code, 404)
+        public_page = self.client.get(reverse("public_site:publication_list"))
+        self.assertNotContains(public_page, reverse("public_site:department_list"))
 
     def test_department_portal_retains_existing_owner_and_staff_object_permissions(self):
         self.client.force_login(self.student_user)

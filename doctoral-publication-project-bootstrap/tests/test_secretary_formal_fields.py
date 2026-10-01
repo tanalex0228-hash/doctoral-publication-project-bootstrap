@@ -11,7 +11,7 @@ from documents.models import SourceDocument
 from documents.services import upload_document
 from publications.models import (
     ConferencePresentationMode, Country, JournalArticleDetail,
-    SustainableDevelopmentGoal,
+    SustainableDevelopmentGoal, PublicationRecord,
 )
 from publications.services import (
     create_revision, save_conference_detail, save_journal_article_detail,
@@ -20,6 +20,7 @@ from publications.services import (
 from reporting.secretary_exports import CONFERENCE_HEADERS, JOURNAL_HEADERS, conference_rows, journal_rows
 from review.services import approve_publication
 from tests.test_core_contract import ContractFixture
+from taxonomy.models import PublicationType
 
 
 class SecretaryFormalFieldTests(ContractFixture):
@@ -206,3 +207,33 @@ class SecretaryFormalFieldTests(ContractFixture):
         response = self.client.get(reverse("statistics:secretary_journal_export"))
         self.assertEqual(response.status_code, 200)
         self.assertIn("期刊類型(新)".encode(), response.content)
+
+    def test_journal_article_taxonomy_slug_opens_full_journal_create_flow(self):
+        self.type.slug = "journal_article"
+        self.type.save(update_fields=["slug"])
+        self.client.force_login(self.student_user)
+        selection = self.client.get(reverse("publications:create"))
+        self.assertContains(selection, "請先選擇成果類型")
+        response = self.client.get(reverse("publications:create"), {"publication_type": self.type.id})
+        self.assertContains(response, "期刊論文正式欄位")
+        self.assertContains(response, "學生作者序")
+        data = {
+            "type_flow": "1", "publication_type": str(self.type.id), "title": "RC4 journal create",
+            "language": "zh-Hant", "publication_stage": PublicationRecord.PublicationStage.PUBLISHED,
+            "journal_or_conference_name": "Journal of RC4", "journal_type": "sci",
+            "international_journal_rank": "top_10", "impact_factor": "1.2500",
+            "student_author_order": "first", "student_author_attribute": "first_author",
+            "publication_medium": "electronic", "paper_nature": "academic", "paper_attribute": "applied",
+        }
+        response = self.client.post(reverse("publications:create"), data)
+        self.assertEqual(response.status_code, 302)
+        publication = PublicationRecord.objects.get(title="RC4 journal create")
+        self.assertEqual(publication.journal_detail.journal_type, "sci")
+
+    def test_conference_taxonomy_slug_opens_conference_create_flow(self):
+        conference_type = PublicationType.objects.create(slug="conference", display_name="學術會議")
+        self.client.force_login(self.student_user)
+        response = self.client.get(reverse("publications:create"), {"publication_type": conference_type.id})
+        self.assertContains(response, "學術會議與發表正式欄位")
+        self.assertContains(response, "與會人員國家")
+        self.assertNotContains(response, "卷號")

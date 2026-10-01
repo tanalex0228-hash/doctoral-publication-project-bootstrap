@@ -1,14 +1,17 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django import forms as django_forms
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from documents.forms import DocumentUploadForm
 from doctoral_students.models import DoctoralStudentProfile
+from taxonomy.models import PublicationType
 from .forms import (
     ConferenceDetailForm, JournalArticleDetailForm, PublicationAuthorForm,
-    PublicationForm, author_form_values, publication_form_values,
+    PublicationForm, PublicationTypeSelectionForm, author_form_values, publication_form_values,
 )
 from .models import ConferenceDetail, JournalArticleDetail, PublicationAuthor, PublicationRecord
 from .permissions import can_edit_publication
@@ -18,6 +21,7 @@ from .services import (
     move_author, save_conference_detail, save_journal_article_detail,
     set_publication_sdgs, submit_publication, update_author, update_publication,
 )
+from .type_codes import publication_detail_kind
 
 
 def _student_for(request):
@@ -40,15 +44,74 @@ def _editable_publication(request, publication_id):
 
 @login_required
 def publication_create(request):
-    if request.method == "POST":
+    selected_type = None
+    selected_type_id = request.POST.get("publication_type") if request.method == "POST" else request.GET.get("publication_type")
+    if selected_type_id:
+        selected_type = get_object_or_404(PublicationType.objects.filter(is_active=True), pk=selected_type_id)
+    detail_kind = publication_detail_kind(selected_type) if selected_type else None
+
+    # Preserve the existing generic endpoint contract for older clients and
+    # non-RC4 taxonomy values. The new wizard explicitly submits type_flow.
+    if request.method == "POST" and not request.POST.get("type_flow"):
         form = PublicationForm(request.POST)
         if form.is_valid():
             values, indices, research_fields = publication_form_values(form)
             publication = create_student_publication(actor=request.user, owner_student=_student_for(request), indices=indices, research_fields=research_fields, **values)
             messages.success(request, "成果設定檔已建立。接著可新增作者與上傳佐證文件。")
             return redirect("publications:detail", publication_id=publication.id)
-    else:
-        form = PublicationForm()
+        return render(request, "publications/publication_form.html", {"form": form, "page_title": "新增成果", "submit_label": "建立成果"})
+
+    if request.method == "GET" and not selected_type:
+        return render(request, "publications/publication_form.html", {
+            "type_selection_form": PublicationTypeSelectionForm(), "page_title": "新增成果",
+        })
+
+    if detail_kind:
+        if request.method == "POST" and request.POST.get("type_flow"):
+            form = PublicationForm(request.POST)
+            detail_form = JournalArticleDetailForm(request.POST) if detail_kind == "journal" else ConferenceDetailForm(request.POST)
+            if form.is_valid() and detail_form.is_valid():
+                values, indices, research_fields = publication_form_values(form)
+                with transaction.atomic():
+                    publication = create_student_publication(
+                        actor=request.user, owner_student=_student_for(request), indices=indices,
+                        research_fields=research_fields, **values,
+                    )
+                    if detail_kind == "journal":
+                        save_journal_article_detail(
+                            actor=request.user, publication_id=publication.id,
+                            **_form_model_values(detail_form),
+                        )
+                    else:
+                        save_conference_detail(
+                            actor=request.user, publication_id=publication.id,
+                            participant_countries=detail_form.cleaned_data["participant_countries"],
+                            presentation_modes=detail_form.cleaned_data["presentation_modes"],
+                            **_form_model_values(detail_form),
+                        )
+                    set_publication_sdgs(
+                        actor=request.user, publication_id=publication.id,
+                        goals=detail_form.cleaned_data["sdgs"],
+                    )
+                messages.success(request, "成果與專屬明細已建立。接著可新增作者與上傳佐證文件。")
+                return redirect("publications:detail", publication_id=publication.id)
+        else:
+            form = PublicationForm(initial={"publication_type": selected_type})
+            detail_form = JournalArticleDetailForm() if detail_kind == "journal" else ConferenceDetailForm()
+        form.fields["publication_type"].widget = django_forms.HiddenInput()
+        return render(request, "publications/publication_form.html", {
+            "form": form, "detail_form": detail_form, "detail_kind": detail_kind,
+            "hidden_root_fields": (
+                {"doi", "issn", "volume", "issue", "pages_or_article_number",
+                 "publication_stage", "submitted_to_journal_date", "accepted_date",
+                 "publication_date"}
+                if detail_kind == "conference" else set()
+            ),
+            "page_title": "新增期刊論文" if detail_kind == "journal" else "新增學術會議與發表",
+            "submit_label": "建立成果", "selected_type": selected_type,
+        })
+
+    form = PublicationForm(initial={"publication_type": selected_type} if selected_type else None)
     return render(request, "publications/publication_form.html", {"form": form, "page_title": "新增成果", "submit_label": "建立成果"})
 
 
@@ -63,6 +126,7 @@ def publication_detail(request, publication_id):
         "documents": publication.documents.filter(is_active=True),
         "document_upload_form": DocumentUploadForm(),
         "can_create_revision": is_official_publication(publication) and publication.owner_student.user_id == request.user.id,
+        "detail_kind": publication_detail_kind(publication.publication_type),
     })
 
 
@@ -92,7 +156,7 @@ def _form_model_values(form):
 @login_required
 def journal_detail_edit(request, publication_id):
     publication = _editable_publication(request, publication_id)
-    if publication.publication_type.slug != "journal":
+    if publication_detail_kind(publication.publication_type) != "journal":
         raise Http404("Journal detail is unavailable for this publication type.")
     try:
         instance = publication.journal_detail
@@ -115,7 +179,7 @@ def journal_detail_edit(request, publication_id):
 @login_required
 def conference_detail_edit(request, publication_id):
     publication = _editable_publication(request, publication_id)
-    if publication.publication_type.slug != "conference":
+    if publication_detail_kind(publication.publication_type) != "conference":
         raise Http404("Conference detail is unavailable for this publication type.")
     try:
         instance = publication.conference_detail

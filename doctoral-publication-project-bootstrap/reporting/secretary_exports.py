@@ -5,6 +5,7 @@ is intentionally not manufactured from, or mapped to, lifecycle status.
 """
 
 from publications.querysets import official_publications
+from publications.type_codes import CONFERENCE_TYPE_SLUGS, JOURNAL_TYPE_SLUGS
 
 
 JOURNAL_HEADERS = [
@@ -42,8 +43,8 @@ def _sdgs(publication):
     return ", ".join(assignment.goal.display_name for assignment in publication.sdg_assignments.all())
 
 
-def _official_for_type(slug, detail_relation):
-    return official_publications().filter(publication_type__slug=slug).select_related(
+def _official_for_type(slugs, detail_relation):
+    return official_publications().filter(publication_type__slug__in=slugs).select_related(
         "owner_student", "publication_type", detail_relation,
     ).prefetch_related(
         "authors", "sdg_assignments__goal",
@@ -53,7 +54,7 @@ def _official_for_type(slug, detail_relation):
 
 
 def journal_rows():
-    records = official_publications().filter(publication_type__slug="journal").select_related(
+    records = official_publications().filter(publication_type__slug__in=JOURNAL_TYPE_SLUGS).select_related(
         "owner_student", "journal_detail__publication_country",
     ).prefetch_related("authors", "sdg_assignments__goal").order_by("owner_student__student_number", "title")
     for publication in records:
@@ -82,7 +83,7 @@ def journal_rows():
 
 
 def conference_rows():
-    records = _official_for_type("conference", "conference_detail")
+    records = _official_for_type(CONFERENCE_TYPE_SLUGS, "conference_detail")
     for publication in records:
         try:
             detail = publication.conference_detail

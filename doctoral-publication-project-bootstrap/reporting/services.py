@@ -3,6 +3,7 @@ from django.db.models import Count, F, Max, Min, Q
 from doctoral_students.models import DoctoralStudentProfile
 from publications.models import PublicationRecord
 from publications.querysets import official_publications
+from publications.type_codes import CONFERENCE_TYPE_SLUGS, JOURNAL_TYPE_SLUGS
 
 
 def approved_publications():
@@ -70,8 +71,8 @@ def student_summary(student):
     author_records = records.filter(authors__linked_user=student.user)
     return {
         "approved_total": records.count(),
-        "journal_total": records.filter(publication_type__slug="journal").count(),
-        "conference_total": records.filter(publication_type__slug="conference").count(),
+        "journal_total": records.filter(publication_type__slug__in=JOURNAL_TYPE_SLUGS).count(),
+        "conference_total": records.filter(publication_type__slug__in=CONFERENCE_TYPE_SLUGS).count(),
         "first_author_total": author_records.filter(authors__author_order=1).distinct().count(),
         "corresponding_author_total": author_records.filter(authors__is_corresponding_author=True).distinct().count(),
         "advisor_coauthored_total": records.filter(
@@ -108,12 +109,12 @@ def student_statistics_table(records, sort="name"):
         approved_total=Count("publications", filter=record_filter, distinct=True),
         journal_total=Count(
             "publications",
-            filter=record_filter & Q(publications__publication_type__slug="journal"),
+            filter=record_filter & Q(publications__publication_type__slug__in=JOURNAL_TYPE_SLUGS),
             distinct=True,
         ),
         conference_total=Count(
             "publications",
-            filter=record_filter & Q(publications__publication_type__slug="conference"),
+            filter=record_filter & Q(publications__publication_type__slug__in=CONFERENCE_TYPE_SLUGS),
             distinct=True,
         ),
         first_author_total=Count(

@@ -26,6 +26,14 @@ class PublicationForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = PublicationRecord
         fields = ["publication_type", "title", "abstract", "journal_or_conference_name", "language", "doi", "issn", "volume", "issue", "pages_or_article_number", "publication_stage", "submitted_to_journal_date", "accepted_date", "publication_date"]
+        labels = {
+            "publication_type": "成果類型", "title": "論文篇名", "abstract": "摘要",
+            "journal_or_conference_name": "期刊名稱／學術會議名", "language": "語言",
+            "doi": "DOI", "issn": "ISSN", "volume": "卷號", "issue": "期別",
+            "pages_or_article_number": "頁數／文章編號", "publication_stage": "發表進度",
+            "submitted_to_journal_date": "投稿日期", "accepted_date": "接受日期",
+            "publication_date": "刊登日期", "indices": "索引分類", "research_fields": "研究領域",
+        }
         widgets = {"abstract": forms.Textarea(attrs={"rows": 5}), "submitted_to_journal_date": forms.DateInput(attrs={"type": "date"}), "accepted_date": forms.DateInput(attrs={"type": "date"}), "publication_date": forms.DateInput(attrs={"type": "date"})}
 
     def __init__(self, *args, **kwargs):
@@ -33,6 +41,9 @@ class PublicationForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["publication_type"].queryset = PublicationType.objects.filter(is_active=True)
         self.fields["indices"].queryset = PublicationIndex.objects.filter(is_active=True)
         self.fields["research_fields"].queryset = ResearchField.objects.filter(is_active=True)
+        # These are explicitly declared fields, so Meta.labels does not apply.
+        self.fields["indices"].label = "索引分類"
+        self.fields["research_fields"].label = "研究領域"
         if self.instance and self.instance.pk:
             self.initial["indices"] = self.instance.indices.all()
             self.initial["research_fields"] = self.instance.research_fields.all()
@@ -50,6 +61,16 @@ class PublicationForm(BootstrapFormMixin, forms.ModelForm):
         if check_digit != expected:
             raise ValidationError("ISSN 檢查碼無效。")
         return f"{compact[:4]}-{compact[4:]}"
+
+
+class PublicationTypeSelectionForm(BootstrapFormMixin, forms.Form):
+    publication_type = forms.ModelChoiceField(
+        queryset=PublicationType.objects.none(), label="成果類型",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["publication_type"].queryset = PublicationType.objects.filter(is_active=True)
 
 
 class PublicationAuthorForm(BootstrapFormMixin, forms.ModelForm):
@@ -70,7 +91,7 @@ def author_form_values(form):
 class JournalArticleDetailForm(BootstrapFormMixin, forms.ModelForm):
     sdgs = forms.ModelMultipleChoiceField(
         queryset=SustainableDevelopmentGoal.objects.none(), required=False,
-        widget=forms.CheckboxSelectMultiple,
+        widget=forms.CheckboxSelectMultiple, label="SDGs",
     )
 
     class Meta:
@@ -108,12 +129,15 @@ class JournalArticleDetailForm(BootstrapFormMixin, forms.ModelForm):
 class ConferenceDetailForm(BootstrapFormMixin, forms.ModelForm):
     participant_countries = forms.ModelMultipleChoiceField(
         queryset=Country.objects.none(), required=False, widget=forms.CheckboxSelectMultiple,
+        label="與會人員國家",
     )
     presentation_modes = forms.ModelMultipleChoiceField(
         queryset=ConferencePresentationMode.objects.none(), required=False, widget=forms.CheckboxSelectMultiple,
+        label="發表方式／任務",
     )
     sdgs = forms.ModelMultipleChoiceField(
         queryset=SustainableDevelopmentGoal.objects.none(), required=False, widget=forms.CheckboxSelectMultiple,
+        label="SDGs",
     )
 
     class Meta:

@@ -2,10 +2,19 @@
 {% block title %}{{ page_title }}｜博士班成果管理{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3"><h1 class="h3">{{ page_title }}</h1>{% if publication %}<a class="btn btn-outline-secondary" href="{% url 'publications:detail' publication.id %}">返回成果</a>{% endif %}</div>
-<form method="post" class="card shadow-sm"><div class="card-body">{% csrf_token %}
+{% if type_selection_form %}
+<form method="get" class="card shadow-sm"><div class="card-body">
+  <p class="text-muted">請先選擇成果類型，系統會顯示對應的正式欄位。</p>
+  <label class="form-label" for="{{ type_selection_form.publication_type.id_for_label }}">{{ type_selection_form.publication_type.label }}</label>{{ type_selection_form.publication_type }}
+  {% for error in type_selection_form.publication_type.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+</div><div class="card-footer bg-white text-end"><button class="btn btn-primary" type="submit">下一步</button></div></form>
+{% else %}
+<form method="post" class="card shadow-sm"><div class="card-body">{% csrf_token %}{% if detail_form %}<input type="hidden" name="type_flow" value="1">{% endif %}
   {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+  {% if selected_type %}<div class="alert alert-info py-2">成果類型：<strong>{{ selected_type.display_name }}</strong></div>{% endif %}
   <div class="row g-3">
     {% for field in form %}
+      {% if field.name not in hidden_root_fields %}
       <div class="{% if field.name == 'title' or field.name == 'abstract' or field.name == 'indices' or field.name == 'research_fields' %}col-12{% else %}col-md-6{% endif %}">
         {% if field.field.widget.input_type == 'checkbox' %}
           <div class="form-check">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
@@ -15,7 +24,37 @@
         {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
         {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
       </div>
+      {% endif %}
     {% endfor %}
+    {% if detail_form %}
+      <div class="col-12"><hr><h2 class="h5">{% if detail_kind == 'journal' %}期刊論文正式欄位{% else %}學術會議與發表正式欄位{% endif %}</h2></div>
+      {% for field in detail_form %}
+        <div class="col-md-6 detail-field" data-name="{{ field.name }}">
+          {% if field.field.widget.input_type == 'checkbox' %}<div class="form-check mt-4">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
+          {% else %}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+    {% endif %}
   </div>
 </div><div class="card-footer bg-white text-end"><button class="btn btn-primary" type="submit">{{ submit_label }}</button></div></form>
+{% if detail_kind == "journal" %}
+<script>
+(() => {
+  const type = document.getElementById('id_journal_type');
+  const order = document.getElementById('id_student_author_order');
+  if (!type || !order) return;
+  const show = (names, visible) => names.forEach(name => { const node = document.querySelector(`[data-name="${name}"]`); if (node) node.hidden = !visible; });
+  function refresh() {
+    show(['international_journal_rank','impact_factor'], ['sci','ssci'].includes(type.value));
+    show(['taiwan_journal_level'], ['tssci','thci'].includes(type.value));
+    show(['custom_journal_type'], ['college_recognized','other'].includes(type.value));
+    show(['student_author_order_reason'], order.value === 'fourth_or_later');
+  }
+  type.addEventListener('change', refresh); order.addEventListener('change', refresh); refresh();
+})();
+</script>
+{% endif %}
+{% endif %}
 {% endblock %}
