@@ -202,6 +202,42 @@ def restore_publication(*, actor, publication_id, request_id=None):
 
 
 @transaction.atomic
+def reconcile_legacy_current_revision(*, actor, revision_id, request_id=None):
+    """One-time safe reconciliation for revisions approved under the old policy."""
+    revision = PublicationRecord.objects.select_for_update().select_related("series").get(pk=revision_id)
+    series = PublicationSeries.objects.select_for_update().get(pk=revision.series_id)
+    if not can_review_publication(actor, revision) or not revision.is_revision or series.current_official_version_id != revision.id:
+        raise PermissionDenied("Only staff may reconcile a legacy current revision.")
+    originals = list(series.versions.select_for_update().filter(is_revision=False).order_by("created_at"))
+    if len(originals) != 1:
+        raise ValidationError("Legacy revision reconciliation requires exactly one original publication.")
+    original = originals[0]
+    rid = request_id or str(uuid.uuid4())
+    _merge_approved_revision(revision=revision, official=original, actor=actor, request_id=rid)
+    original.visibility_scope = revision.visibility_scope
+    original.is_published = revision.is_published
+    original.updated_by = actor
+    old = original.workflow_status
+    original.workflow_status = PublicationRecord.WorkflowStatus.APPROVED
+    original.save(update_fields=[
+        "workflow_status", "visibility_scope", "is_published", "updated_by", "updated_at",
+    ])
+    if old != original.workflow_status:
+        record_transition(
+            publication=original, actor=actor, from_status=old,
+            to_status=original.workflow_status, request_id=rid,
+            reason="舊版 revision 合併回原成果",
+        )
+    series.current_official_version = original
+    series.save(update_fields=["current_official_version", "updated_at"])
+    record_event(
+        actor=actor, action="publication.legacy_revision_reconciled", target=original,
+        request_id=rid, metadata={"revision_id": str(revision.id)},
+    )
+    return original
+
+
+@transaction.atomic
 def revoke_approval(*, actor, publication_id, reason="", request_id=None):
     """Invalidate a current approval without erasing its governance history."""
     publication = PublicationRecord.objects.select_for_update().select_related("series").get(pk=publication_id)

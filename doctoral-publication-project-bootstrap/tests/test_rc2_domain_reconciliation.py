@@ -16,7 +16,10 @@ from publications.querysets import official_publications
 from reporting.portable_export import document_manifest, rows_for
 from reporting.services import approved_publications, student_summary
 from review.models import ReviewDecision
-from review.services import approve_publication, archive_publication, return_for_revision, revoke_approval
+from review.services import (
+    approve_publication, archive_publication, reconcile_legacy_current_revision,
+    return_for_revision, revoke_approval,
+)
 from tests.test_core_contract import ContractFixture
 
 
@@ -78,6 +81,23 @@ class Rc2DomainReconciliationTests(ContractFixture):
         self.assertTrue(can_view_publication(None, original))
         self.assertFalse(can_view_publication(None, revision))
         self.assertTrue(revision.review_decisions.filter(action=ReviewDecision.Action.APPROVE).exists())
+
+    def test_legacy_current_revision_can_be_reconciled_back_into_original(self):
+        original = self.approved("Original official")
+        archive_publication(actor=self.staff, publication_id=original.id)
+        revision = create_revision(actor=self.student_user, publication_id=original.id)
+        revision.title = "Legacy revised title"
+        revision.workflow_status = PublicationRecord.WorkflowStatus.APPROVED
+        revision.save(update_fields=["title", "normalized_title", "workflow_status", "updated_at"])
+        original.series.current_official_version = revision
+        original.series.save(update_fields=["current_official_version", "updated_at"])
+        reconciled = reconcile_legacy_current_revision(actor=self.staff, revision_id=revision.id)
+        original.refresh_from_db()
+        original.series.refresh_from_db()
+        self.assertEqual(reconciled.id, original.id)
+        self.assertEqual(original.title, "Legacy revised title")
+        self.assertEqual(original.workflow_status, PublicationRecord.WorkflowStatus.APPROVED)
+        self.assertEqual(original.series.current_official_version_id, original.id)
 
     def test_end_date_does_not_remove_advisor_access_but_inactive_or_archived_does(self):
         publication = self.approved()
