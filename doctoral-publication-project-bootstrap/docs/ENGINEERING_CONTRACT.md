@@ -175,11 +175,17 @@ submitted -> returned
 returned -> submitted
 submitted -> approved
 approved -> archived
+archived -> approved  (only when an authorized staff/root actor restores it for publication)
 ```
 
 If withdrawal is implemented, it must be explicitly specified and tested.
 
 No direct student-driven transition to `approved` is permitted.
+
+An approved-record correction is an internal revision review task. It must not
+become a second current/public result: once approved, its reviewed metadata is
+merged into the existing official record while the revision retains its review
+and audit evidence.
 
 Transitions are service-layer operations using transactions. Where two reviewers/actions could race, use row-level locking or an equivalent safe pattern.
 

@@ -13,7 +13,7 @@ from publications.services import set_published, set_visibility
 from taxonomy.models import PublicationType
 from .forms import PublicationSettingsForm, ReturnForRevisionForm, RevokeApprovalForm
 from .models import PublicationTransition
-from .services import approve_publication, archive_publication, return_for_revision, revoke_approval
+from .services import approve_publication, archive_publication, restore_publication, return_for_revision, revoke_approval
 
 
 def _require_review_role(request):
@@ -179,6 +179,8 @@ def publication_settings(request, publication_id):
     if request.method == "POST":
         form = PublicationSettingsForm(request.POST)
         if form.is_valid():
+            if publication.workflow_status == PublicationRecord.WorkflowStatus.ARCHIVED and form.cleaned_data["is_published"]:
+                publication = restore_publication(actor=request.user, publication_id=publication.id)
             set_visibility(actor=request.user, publication_id=publication.id, visibility_scope=form.cleaned_data["visibility_scope"])
             set_published(actor=request.user, publication_id=publication.id, is_published=form.cleaned_data["is_published"])
             messages.success(request, "發佈與可見範圍設定已更新。")

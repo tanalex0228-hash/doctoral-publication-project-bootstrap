@@ -63,7 +63,9 @@ def profile_view(request):
     publications = PublicationRecord.objects.none()
     approved = PublicationRecord.objects.none()
     if student:
-        publications = PublicationRecord.objects.filter(owner_student=student).select_related("publication_type").order_by("-updated_at")
+        publications = PublicationRecord.objects.filter(
+            owner_student=student, is_revision=False,
+        ).select_related("publication_type").order_by("-updated_at")
         approved = official_publications().filter(owner_student=student).select_related("publication_type")
     return render(request, "accounts/profile.html", {
         "student": student,

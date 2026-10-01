@@ -52,7 +52,7 @@ class Rc2DomainReconciliationTests(ContractFixture):
         self.assertTrue(publication.review_decisions.filter(action=ReviewDecision.Action.REVOKE).exists())
         self.assertTrue(publication.transitions.filter(to_status=PublicationRecord.WorkflowStatus.REVOKED).exists())
 
-    def test_revision_keeps_old_official_until_new_revision_is_approved(self):
+    def test_revision_is_an_internal_review_task_and_merges_into_original_when_approved(self):
         original = self.approved("Original official")
         set_visibility(actor=self.staff, publication_id=original.id, visibility_scope=PublicationRecord.VisibilityScope.PUBLIC)
         set_published(actor=self.staff, publication_id=original.id, is_published=True)
@@ -71,10 +71,13 @@ class Rc2DomainReconciliationTests(ContractFixture):
         submit_publication(actor=self.student_user, publication_id=revision.id)
         approve_publication(actor=self.staff, publication_id=revision.id)
         revision.refresh_from_db()
+        original.refresh_from_db()
         original.series.refresh_from_db()
-        self.assertEqual(original.series.current_official_version_id, revision.id)
-        self.assertFalse(can_view_publication(None, original))
-        self.assertTrue(can_view_publication(None, revision))
+        self.assertEqual(original.series.current_official_version_id, original.id)
+        self.assertEqual(original.title, "Pending correction")
+        self.assertTrue(can_view_publication(None, original))
+        self.assertFalse(can_view_publication(None, revision))
+        self.assertTrue(revision.review_decisions.filter(action=ReviewDecision.Action.APPROVE).exists())
 
     def test_end_date_does_not_remove_advisor_access_but_inactive_or_archived_does(self):
         publication = self.approved()

@@ -7,7 +7,7 @@ from .models import (
     PublicationRecord, PublicationSDGAssignment, SustainableDevelopmentGoal,
 )
 from .services import set_published, set_visibility
-from review.services import approve_publication, archive_publication, return_for_revision
+from review.services import approve_publication, archive_publication, restore_publication, return_for_revision
 
 class PublicationAuthorInline(admin.TabularInline):
     model = PublicationAuthor
@@ -71,6 +71,8 @@ class PublicationRecordAdmin(admin.ModelAdmin):
         failures = []
         for publication in queryset:
             try:
+                if publication.workflow_status == PublicationRecord.WorkflowStatus.ARCHIVED:
+                    publication = restore_publication(actor=request.user, publication_id=publication.id)
                 set_visibility(actor=request.user, publication_id=publication.id, visibility_scope=PublicationRecord.VisibilityScope.PUBLIC)
                 set_published(actor=request.user, publication_id=publication.id, is_published=True)
             except (PermissionDenied, ValidationError) as error:

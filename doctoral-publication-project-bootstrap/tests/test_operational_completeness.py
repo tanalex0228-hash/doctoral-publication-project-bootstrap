@@ -91,6 +91,12 @@ class ArchiveAndCsvTests(ContractFixture):
             "visibility_scope": PublicationRecord.VisibilityScope.PUBLIC,
         })
         self.assertEqual(response.status_code, 302)
+        publication.refresh_from_db()
+        self.assertEqual(publication.workflow_status, PublicationRecord.WorkflowStatus.APPROVED)
+        self.assertTrue(publication.transitions.filter(
+            from_status=PublicationRecord.WorkflowStatus.ARCHIVED,
+            to_status=PublicationRecord.WorkflowStatus.APPROVED,
+        ).exists())
         self.assertEqual(self.client.get(reverse("public_site:publication_detail", args=[publication.id])).status_code, 200)
 
     def test_archive_does_not_widen_private_document_permission(self):

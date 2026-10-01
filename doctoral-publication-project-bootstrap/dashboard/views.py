@@ -16,7 +16,9 @@ def student_dashboard(request):
         student = request.user.doctoral_profile
     except DoctoralStudentProfile.DoesNotExist as error:
         raise Http404("Student profile not found.") from error
-    publications = PublicationRecord.objects.filter(owner_student=student).select_related("publication_type").order_by("-updated_at")
+    publications = PublicationRecord.objects.filter(
+        owner_student=student, is_revision=False,
+    ).select_related("publication_type").order_by("-updated_at")
     statuses = PublicationRecord.WorkflowStatus
     return render(request, "dashboard/student_dashboard.html", {
         "student": student,
