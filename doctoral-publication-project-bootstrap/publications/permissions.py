@@ -10,7 +10,19 @@ from .querysets import is_official_publication, official_publications
 
 
 def is_staff_actor(user):
-    return bool(user and user.is_authenticated and user.has_project_role("staff", "admin"))
+    """Project staff roles, plus the explicit Django root break-glass account.
+
+    ``is_staff`` alone only grants access to Django Admin; it must never grant
+    governed publication authority.  A Django superuser is deliberately a
+    stronger, explicit root authority for institutional recovery and can use
+    the same audited workflow services as a project admin.
+    """
+    return bool(
+        user
+        and user.is_authenticated
+        and user.is_active
+        and (user.is_superuser or user.has_project_role("staff", "admin"))
+    )
 
 
 def is_advisor_actor(user):

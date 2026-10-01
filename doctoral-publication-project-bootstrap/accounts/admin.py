@@ -9,7 +9,6 @@ class AuditedUserAdmin(AuditedAdminMixin, UserAdmin):
     list_display = ("username", "email", "first_name", "last_name", "is_staff", "last_login")
     ordering = ("-last_login", "username")
     readonly_fields = ("last_login", "date_joined")
-    def has_delete_permission(self, request, obj=None): return False
 
 
 @admin.register(Role)

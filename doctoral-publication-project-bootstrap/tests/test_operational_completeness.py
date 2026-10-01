@@ -147,6 +147,15 @@ class ArchiveAndCsvTests(ContractFixture):
         self.assertFalse(admin.site._registry[SourceDocument].has_change_permission(request))
         self.assertIn("is_active", admin.site._registry[SourceDocument].readonly_fields)
 
+    def test_root_can_manage_accounts_but_publication_workflow_admin_actions_are_safe(self):
+        root = User.objects.create_superuser(username="admin-root", email="admin-root@example.edu", password="pass")
+        request = RequestFactory().get("/admin/")
+        request.user = root
+        self.assertTrue(admin.site._registry[User].has_delete_permission(request))
+        actions = admin.site._registry[PublicationRecord].get_actions(request)
+        self.assertTrue({"approve_selected", "return_selected", "archive_selected", "publish_public_selected"}.issubset(actions))
+        self.assertNotIn("delete_selected", actions)
+
 
 class PaginationTests(ContractFixture):
     def setUp(self):

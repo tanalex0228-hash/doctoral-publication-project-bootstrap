@@ -48,12 +48,15 @@ class RoleMatrixRegressionTests(ContractFixture):
             password="pass",
             is_staff=True,
         )
+        self.root_user = User.objects.create_superuser(
+            username="release-root", email="release-root@example.edu", password="pass",
+        )
         self.multi_role_user = self.user("release-multi-role", self.student_role)
         UserRole.objects.create(user=self.multi_role_user, role=self.advisor_role)
 
     def test_staff_admin_and_non_business_staff_boundaries(self):
         staff_resources = ("review:queue", "review:archive_list", "statistics:dashboard")
-        for user in (self.staff, self.admin_user):
+        for user in (self.staff, self.admin_user, self.root_user):
             self.client.force_login(user)
             for resource in staff_resources:
                 self.assertEqual(self.client.get(reverse(resource)).status_code, 200)
@@ -62,6 +65,12 @@ class RoleMatrixRegressionTests(ContractFixture):
             self.client.force_login(user)
             for resource in staff_resources:
                 self.assertEqual(self.client.get(reverse(resource)).status_code, 404)
+
+    def test_root_receives_review_navigation_but_django_staff_only_does_not(self):
+        self.client.force_login(self.root_user)
+        self.assertContains(self.client.get(reverse("public_site:publication_list")), reverse("review:queue"))
+        self.client.force_login(self.django_staff_only)
+        self.assertNotContains(self.client.get(reverse("public_site:publication_list")), reverse("review:queue"))
 
     def test_department_and_advisor_boundaries_remain_role_and_object_scoped(self):
         self.assertEqual(self.client.get(reverse("public_site:publication_list")).status_code, 200)
