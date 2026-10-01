@@ -6,11 +6,18 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from documents.forms import DocumentUploadForm
 from doctoral_students.models import DoctoralStudentProfile
-from .forms import PublicationAuthorForm, PublicationForm, author_form_values, publication_form_values
-from .models import PublicationAuthor, PublicationRecord
+from .forms import (
+    ConferenceDetailForm, JournalArticleDetailForm, PublicationAuthorForm,
+    PublicationForm, author_form_values, publication_form_values,
+)
+from .models import ConferenceDetail, JournalArticleDetail, PublicationAuthor, PublicationRecord
 from .permissions import can_edit_publication
 from .querysets import is_official_publication
-from .services import add_author, create_revision, create_student_publication, delete_author, move_author, submit_publication, update_author, update_publication
+from .services import (
+    add_author, create_revision, create_student_publication, delete_author,
+    move_author, save_conference_detail, save_journal_article_detail,
+    set_publication_sdgs, submit_publication, update_author, update_publication,
+)
 
 
 def _student_for(request):
@@ -72,6 +79,64 @@ def publication_edit(request, publication_id):
     else:
         form = PublicationForm(instance=publication)
     return render(request, "publications/publication_form.html", {"form": form, "page_title": "編輯成果", "submit_label": "儲存變更", "publication": publication})
+
+
+def _form_model_values(form):
+    return {
+        field.name: form.cleaned_data[field.name]
+        for field in form._meta.model._meta.fields
+        if field.name not in {"id", "publication"} and field.name in form.cleaned_data
+    }
+
+
+@login_required
+def journal_detail_edit(request, publication_id):
+    publication = _editable_publication(request, publication_id)
+    if publication.publication_type.slug != "journal":
+        raise Http404("Journal detail is unavailable for this publication type.")
+    try:
+        instance = publication.journal_detail
+    except JournalArticleDetail.DoesNotExist:
+        instance = None
+    if request.method == "POST":
+        form = JournalArticleDetailForm(request.POST, instance=instance)
+        if form.is_valid():
+            save_journal_article_detail(actor=request.user, publication_id=publication.id, **_form_model_values(form))
+            set_publication_sdgs(actor=request.user, publication_id=publication.id, goals=form.cleaned_data["sdgs"])
+            messages.success(request, "期刊論文明細已更新。")
+            return redirect("publications:detail", publication_id=publication.id)
+    else:
+        form = JournalArticleDetailForm(instance=instance)
+    return render(request, "publications/detail_form.html", {
+        "form": form, "publication": publication, "detail_kind": "journal", "page_title": "期刊論文明細",
+    })
+
+
+@login_required
+def conference_detail_edit(request, publication_id):
+    publication = _editable_publication(request, publication_id)
+    if publication.publication_type.slug != "conference":
+        raise Http404("Conference detail is unavailable for this publication type.")
+    try:
+        instance = publication.conference_detail
+    except ConferenceDetail.DoesNotExist:
+        instance = None
+    if request.method == "POST":
+        form = ConferenceDetailForm(request.POST, instance=instance)
+        if form.is_valid():
+            save_conference_detail(
+                actor=request.user, publication_id=publication.id,
+                participant_countries=form.cleaned_data["participant_countries"],
+                presentation_modes=form.cleaned_data["presentation_modes"], **_form_model_values(form),
+            )
+            set_publication_sdgs(actor=request.user, publication_id=publication.id, goals=form.cleaned_data["sdgs"])
+            messages.success(request, "學術會議明細已更新。")
+            return redirect("publications:detail", publication_id=publication.id)
+    else:
+        form = ConferenceDetailForm(instance=instance)
+    return render(request, "publications/detail_form.html", {
+        "form": form, "publication": publication, "detail_kind": "conference", "page_title": "學術會議與發表明細",
+    })
 
 
 @login_required

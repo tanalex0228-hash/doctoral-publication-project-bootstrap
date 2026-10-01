@@ -19,6 +19,7 @@ from .services import (
     student_statistics_table,
     student_summary,
 )
+from .secretary_exports import CONFERENCE_HEADERS, JOURNAL_HEADERS, conference_rows, journal_rows
 
 
 def _require_statistics_role(request):
@@ -105,3 +106,26 @@ def csv_export(request):
     for row in export_ready_rows(records):
         writer.writerow([csv_safe_cell(value) for value in row])
     return response
+
+
+def _secretary_csv_response(filename, headers, rows):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.write("\ufeff")
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow([csv_safe_cell(value) for value in row])
+    return response
+
+
+@login_required
+def secretary_journal_export(request):
+    _require_statistics_role(request)
+    return _secretary_csv_response("secretary-journal-publications.csv", JOURNAL_HEADERS, journal_rows())
+
+
+@login_required
+def secretary_conference_export(request):
+    _require_statistics_role(request)
+    return _secretary_csv_response("secretary-conference-publications.csv", CONFERENCE_HEADERS, conference_rows())

@@ -162,3 +162,246 @@ class PublicationFieldAssignment(models.Model):
         constraints = [models.UniqueConstraint(fields=["publication", "field"], name="uq_publication_field")]
         verbose_name = "成果研究領域對照"
         verbose_name_plural = "成果研究領域對照"
+
+
+class Country(models.Model):
+    """Maintained country reference; identity is never stored as free text."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=12, unique=True, db_index=True)
+    zh_name = models.CharField(max_length=100, db_index=True)
+    en_name = models.CharField(max_length=150, blank=True, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    display_order = models.PositiveSmallIntegerField(default=0, db_index=True)
+
+    class Meta:
+        ordering = ["display_order", "zh_name", "code"]
+        verbose_name = "國家／地區"
+        verbose_name_plural = "國家／地區"
+
+    def __str__(self):
+        return f"{self.code}－{self.zh_name}" if self.en_name else f"{self.code}－{self.zh_name}"
+
+
+class SustainableDevelopmentGoal(models.Model):
+    """Stable SDG reference data, including the mutually-exclusive NONE code."""
+    class Code(models.TextChoices):
+        SDG01 = "SDG01", "SDG01 消除貧窮"
+        SDG02 = "SDG02", "SDG02 消除飢餓"
+        SDG03 = "SDG03", "SDG03 健康與福祉"
+        SDG04 = "SDG04", "SDG04 優質教育"
+        SDG05 = "SDG05", "SDG05 性別平權"
+        SDG06 = "SDG06", "SDG06 淨水及衛生"
+        SDG07 = "SDG07", "SDG07 可負擔能源"
+        SDG08 = "SDG08", "SDG08 合適的工作及經濟成長"
+        SDG09 = "SDG09", "SDG09 工業、創新及基礎建設"
+        SDG10 = "SDG10", "SDG10 減少不平等"
+        SDG11 = "SDG11", "SDG11 永續城鄉"
+        SDG12 = "SDG12", "SDG12 責任消費及生產"
+        SDG13 = "SDG13", "SDG13 氣候行動"
+        SDG14 = "SDG14", "SDG14 海洋生態"
+        SDG15 = "SDG15", "SDG15 陸域生態"
+        SDG16 = "SDG16", "SDG16 和平、正義及健全制度"
+        SDG17 = "SDG17", "SDG17 夥伴關係"
+        NONE = "NONE", "無"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=8, choices=Code.choices, unique=True)
+    display_name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True, db_index=True)
+    display_order = models.PositiveSmallIntegerField(default=0, db_index=True)
+
+    class Meta:
+        ordering = ["display_order", "code"]
+        verbose_name = "永續發展目標"
+        verbose_name_plural = "永續發展目標"
+
+    def __str__(self):
+        return self.display_name
+
+
+class PublicationSDGAssignment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    publication = models.ForeignKey(PublicationRecord, on_delete=models.PROTECT, related_name="sdg_assignments")
+    goal = models.ForeignKey(SustainableDevelopmentGoal, on_delete=models.PROTECT, related_name="publication_assignments")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["publication", "goal"], name="uq_publication_sdg")]
+        verbose_name = "成果 SDG 對照"
+        verbose_name_plural = "成果 SDG 對照"
+
+
+class JournalArticleDetail(models.Model):
+    class JournalType(models.TextChoices):
+        TSSCI = "tssci", "TSSCI"
+        SCI = "sci", "SCI"
+        SSCI = "ssci", "SSCI"
+        EI = "ei", "EI"
+        AHCI = "ahci", "A&HCI"
+        THCI = "thci", "THCI"
+        SCOPUS = "scopus", "Scopus"
+        COLLEGE_RECOGNIZED = "college_recognized", "各院認可之優良期刊"
+        OTHER = "other", "其他"
+
+    class InternationalJournalRank(models.TextChoices):
+        TOP_10 = "top_10", "前 10%"
+        TOP_10_25 = "top_10_25", "10–25%"
+        TOP_25_50 = "top_25_50", "25–50%"
+        BOTTOM_50_OR_UNRANKED = "bottom_50_or_unranked", "後 50% 或未有排名"
+
+    class TaiwanJournalLevel(models.TextChoices):
+        LEVEL_1 = "level_1", "第一級"
+        LEVEL_2 = "level_2", "第二級"
+        OTHER = "other", "非第一級及第二級"
+
+    class StudentAuthorOrder(models.TextChoices):
+        FIRST = "first", "第一作者"
+        SECOND = "second", "第二作者"
+        THIRD = "third", "第三作者"
+        FOURTH_OR_LATER = "fourth_or_later", "第四作者（含）以後"
+
+    class StudentAuthorAttribute(models.TextChoices):
+        FIRST_AUTHOR = "first_author", "第一作者"
+        CORRESPONDING_AUTHOR = "corresponding_author", "通訊作者"
+        CO_FIRST_OR_CO_CORRESPONDING = "co_first_or_co_corresponding", "共同第一作者或共同通訊作者"
+        NEITHER = "neither", "非第一或通訊作者"
+
+    class PublicationMedium(models.TextChoices):
+        PAPER = "paper", "紙本期刊"
+        ELECTRONIC = "electronic", "電子期刊"
+        PAPER_AND_ELECTRONIC = "paper_and_electronic", "紙本及電子期刊"
+
+    class PaperNature(models.TextChoices):
+        ACADEMIC = "academic", "學術"
+        EDUCATIONAL = "educational", "學習教育"
+        PRACTICAL = "practical", "實務"
+
+    class PaperAttribute(models.TextChoices):
+        THEORETICAL = "theoretical", "理論"
+        APPLIED = "applied", "應用"
+        OTHER = "other", "其他"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    publication = models.OneToOneField(PublicationRecord, on_delete=models.PROTECT, related_name="journal_detail")
+    journal_type = models.CharField(max_length=24, choices=JournalType.choices, db_index=True)
+    legacy_journal_type = models.CharField(max_length=255, blank=True, editable=False)
+    international_journal_rank = models.CharField(max_length=24, choices=InternationalJournalRank.choices, blank=True)
+    impact_factor = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    taiwan_journal_level = models.CharField(max_length=16, choices=TaiwanJournalLevel.choices, blank=True)
+    custom_journal_type = models.CharField(max_length=255, blank=True)
+    student_author_order = models.CharField(max_length=20, choices=StudentAuthorOrder.choices)
+    student_author_order_reason = models.CharField(max_length=500, blank=True)
+    student_author_attribute = models.CharField(max_length=32, choices=StudentAuthorAttribute.choices)
+    is_student_corresponding_author = models.BooleanField(default=False)
+    has_international_collaboration = models.BooleanField(default=False)
+    publication_medium = models.CharField(max_length=24, choices=PublicationMedium.choices)
+    paper_nature = models.CharField(max_length=16, choices=PaperNature.choices)
+    paper_attribute = models.CharField(max_length=16, choices=PaperAttribute.choices)
+    total_pages = models.PositiveIntegerField(null=True, blank=True)
+    is_annual_representative_work = models.BooleanField(default=False)
+    is_peer_reviewed = models.BooleanField(default=False)
+    citation_count = models.PositiveIntegerField(null=True, blank=True)
+    publication_country = models.ForeignKey(Country, on_delete=models.PROTECT, null=True, blank=True, related_name="journal_publications")
+    publication_place = models.CharField(max_length=255, blank=True)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "期刊論文明細"
+        verbose_name_plural = "期刊論文明細"
+
+    def clean(self):
+        errors = {}
+        if self.journal_type in {self.JournalType.SCI, self.JournalType.SSCI}:
+            if not self.international_journal_rank:
+                errors["international_journal_rank"] = "SCI／SSCI 必須填寫期刊排名。"
+        elif self.international_journal_rank or self.impact_factor is not None:
+            errors["international_journal_rank"] = "僅 SCI／SSCI 可填寫排名與 Impact factor。"
+        if self.journal_type in {self.JournalType.TSSCI, self.JournalType.THCI}:
+            if not self.taiwan_journal_level:
+                errors["taiwan_journal_level"] = "TSSCI／THCI 必須填寫收錄級別。"
+        elif self.taiwan_journal_level:
+            errors["taiwan_journal_level"] = "僅 TSSCI／THCI 可填寫收錄級別。"
+        if self.journal_type in {self.JournalType.COLLEGE_RECOGNIZED, self.JournalType.OTHER}:
+            if not self.custom_journal_type.strip():
+                errors["custom_journal_type"] = "請說明期刊類型。"
+        elif self.custom_journal_type:
+            errors["custom_journal_type"] = "僅各院認可之優良期刊或其他可填寫說明。"
+        if self.student_author_order == self.StudentAuthorOrder.FOURTH_OR_LATER and not self.student_author_order_reason.strip():
+            errors["student_author_order_reason"] = "第四作者（含）以後必須填寫原因。"
+        if errors:
+            raise ValidationError(errors)
+
+
+class ConferenceDetail(models.Model):
+    class ConferenceType(models.TextChoices):
+        INTERNATIONAL = "international", "國際研討會"
+        DOMESTIC = "domestic", "國內研討會"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    publication = models.OneToOneField(PublicationRecord, on_delete=models.PROTECT, related_name="conference_detail")
+    conference_type = models.CharField(max_length=16, choices=ConferenceType.choices)
+    organizer = models.CharField(max_length=500)
+    location_country = models.ForeignKey(Country, on_delete=models.PROTECT, related_name="conference_locations")
+    location_city = models.CharField(max_length=255)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    received_subsidy = models.BooleanField(default=False)
+    presented_paper = models.BooleanField(default=False)
+    remarks = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "學術會議明細"
+        verbose_name_plural = "學術會議明細"
+
+    def clean(self):
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValidationError({"end_date": "結束日期不得早於起始日期。"})
+
+
+class ConferenceParticipantCountry(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conference = models.ForeignKey(ConferenceDetail, on_delete=models.PROTECT, related_name="participant_country_assignments")
+    country = models.ForeignKey(Country, on_delete=models.PROTECT, related_name="conference_participations")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["conference", "country"], name="uq_conference_participant_country")]
+        verbose_name = "會議與會國家"
+        verbose_name_plural = "會議與會國家"
+
+
+class ConferencePresentationMode(models.Model):
+    """Stable, manageable mode catalogue; no free-text presentation identity."""
+    class Code(models.TextChoices):
+        KEYNOTE_SPEAKER = "keynote_speaker", "Keynote speaker"
+        INVITED_SPEAKER = "invited_speaker", "Invited speaker"
+        SESSION_CHAIRMAN = "session_chairman", "Session chairman"
+        ORAL = "oral", "Oral"
+        POSTER = "poster", "Poster"
+        ABSTRACT = "abstract", "Abstract"
+        ARTICLE = "article", "Article"
+        ATTENDANCE_ONLY = "attendance_only", "僅與會"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=32, choices=Code.choices, unique=True)
+    display_name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True, db_index=True)
+    display_order = models.PositiveSmallIntegerField(default=0, db_index=True)
+
+    class Meta:
+        ordering = ["display_order", "code"]
+        verbose_name = "會議發表方式"
+        verbose_name_plural = "會議發表方式"
+
+    def __str__(self):
+        return self.display_name
+
+
+class ConferencePresentationModeAssignment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conference = models.ForeignKey(ConferenceDetail, on_delete=models.PROTECT, related_name="presentation_mode_assignments")
+    mode = models.ForeignKey(ConferencePresentationMode, on_delete=models.PROTECT, related_name="conference_assignments")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["conference", "mode"], name="uq_conference_presentation_mode")]
+        verbose_name = "會議發表方式對照"
+        verbose_name_plural = "會議發表方式對照"

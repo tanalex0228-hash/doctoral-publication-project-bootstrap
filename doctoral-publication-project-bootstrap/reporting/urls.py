@@ -10,4 +10,6 @@ urlpatterns = [
     path("students/<uuid:student_id>/", views.student_statistics_detail, name="student_detail"),
     path("export-ready/", views.export_ready_data, name="export_ready"),
     path("export.csv", views.csv_export, name="csv_export"),
+    path("secretary/journal.csv", views.secretary_journal_export, name="secretary_journal_export"),
+    path("secretary/conference.csv", views.secretary_conference_export, name="secretary_conference_export"),
 ]

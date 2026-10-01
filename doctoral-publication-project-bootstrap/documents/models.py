@@ -11,6 +11,7 @@ class SourceDocument(models.Model):
         JOURNAL_PROOF = "journal_proof", "期刊佐證"
         INDEX_PROOF = "index_proof", "索引佐證"
         CONFERENCE_PROOF = "conference_proof", "會議佐證"
+        CONFERENCE_EVIDENCE = "conference_evidence", "學術會議佐證"
         OTHER = "other", "其他"
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     publication = models.ForeignKey("publications.PublicationRecord", on_delete=models.PROTECT, related_name="documents")

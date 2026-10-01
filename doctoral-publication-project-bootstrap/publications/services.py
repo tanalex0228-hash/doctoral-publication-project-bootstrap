@@ -5,7 +5,12 @@ from django.db.models import Max
 from django.utils import timezone
 from audit.services import record_event
 from review.services import record_transition
-from .models import PublicationAuthor, PublicationRecord, PublicationSeries
+from .models import (
+    ConferenceDetail, ConferenceParticipantCountry,
+    ConferencePresentationModeAssignment, JournalArticleDetail,
+    PublicationAuthor, PublicationRecord, PublicationSDGAssignment,
+    PublicationSeries,
+)
 from .querysets import is_official_publication
 from .permissions import can_edit_publication, is_staff_actor
 
@@ -83,6 +88,34 @@ def create_revision(*, actor, publication_id, request_id=None):
             linked_professor=author.linked_professor,
             orcid=author.orcid,
         )
+    if hasattr(official, "journal_detail"):
+        detail = official.journal_detail
+        values = {
+            field.name: getattr(detail, field.name)
+            for field in JournalArticleDetail._meta.fields
+            if field.name not in {"id", "publication"}
+        }
+        JournalArticleDetail.objects.create(publication=revision, **values)
+    if hasattr(official, "conference_detail"):
+        detail = official.conference_detail
+        values = {
+            field.name: getattr(detail, field.name)
+            for field in ConferenceDetail._meta.fields
+            if field.name not in {"id", "publication"}
+        }
+        copied_detail = ConferenceDetail.objects.create(publication=revision, **values)
+        ConferenceParticipantCountry.objects.bulk_create([
+            ConferenceParticipantCountry(conference=copied_detail, country=assignment.country)
+            for assignment in detail.participant_country_assignments.all()
+        ])
+        ConferencePresentationModeAssignment.objects.bulk_create([
+            ConferencePresentationModeAssignment(conference=copied_detail, mode=assignment.mode)
+            for assignment in detail.presentation_mode_assignments.all()
+        ])
+    PublicationSDGAssignment.objects.bulk_create([
+        PublicationSDGAssignment(publication=revision, goal=assignment.goal)
+        for assignment in official.sdg_assignments.all()
+    ])
     rid = _request_id(request_id)
     record_transition(publication=revision, actor=actor, from_status="", to_status=PublicationRecord.WorkflowStatus.DRAFT, request_id=rid)
     record_event(
@@ -111,6 +144,70 @@ def update_publication(*, actor, publication_id, indices=(), research_fields=(),
     _set_taxonomies(publication, indices=indices, research_fields=research_fields)
     record_event(actor=actor, action="publication.updated", target=publication, request_id=_request_id(request_id), metadata={"fields": sorted(fields)})
     return publication
+
+
+def _editable_detail_publication(*, actor, publication_id):
+    publication = PublicationRecord.objects.select_for_update().get(pk=publication_id)
+    if not can_edit_publication(actor, publication):
+        raise PermissionDenied("Publication detail is not editable by this actor.")
+    return publication
+
+
+@transaction.atomic
+def save_journal_article_detail(*, actor, publication_id, request_id=None, **fields):
+    publication = _editable_detail_publication(actor=actor, publication_id=publication_id)
+    detail, _ = JournalArticleDetail.objects.get_or_create(publication=publication, defaults=fields)
+    if detail.pk and any(getattr(detail, field) != value for field, value in fields.items()):
+        for field, value in fields.items():
+            setattr(detail, field, value)
+    detail.full_clean()
+    detail.save()
+    record_event(actor=actor, action="publication.journal_detail_saved", target=publication,
+                 request_id=_request_id(request_id))
+    return detail
+
+
+@transaction.atomic
+def save_conference_detail(*, actor, publication_id, participant_countries=(), presentation_modes=(), request_id=None, **fields):
+    if len(set(participant_countries)) > 5:
+        raise ValidationError("與會人員國家最多可選擇 5 個。")
+    publication = _editable_detail_publication(actor=actor, publication_id=publication_id)
+    detail, _ = ConferenceDetail.objects.get_or_create(publication=publication, defaults=fields)
+    if detail.pk and any(getattr(detail, field) != value for field, value in fields.items()):
+        for field, value in fields.items():
+            setattr(detail, field, value)
+    detail.full_clean()
+    detail.save()
+    detail.participant_country_assignments.all().delete()
+    ConferenceParticipantCountry.objects.bulk_create([
+        ConferenceParticipantCountry(conference=detail, country=country)
+        for country in set(participant_countries)
+    ])
+    detail.presentation_mode_assignments.all().delete()
+    ConferencePresentationModeAssignment.objects.bulk_create([
+        ConferencePresentationModeAssignment(conference=detail, mode=mode)
+        for mode in set(presentation_modes)
+    ])
+    record_event(actor=actor, action="publication.conference_detail_saved", target=publication,
+                 request_id=_request_id(request_id))
+    return detail
+
+
+@transaction.atomic
+def set_publication_sdgs(*, actor, publication_id, goals=(), request_id=None):
+    """Replace normalized SDG assignments through the publication service boundary."""
+    if len(set(goals)) > 3:
+        raise ValidationError("SDGs 最多可選擇 3 項。")
+    codes = {goal.code for goal in goals}
+    if "NONE" in codes and len(codes) > 1:
+        raise ValidationError("選擇「無」時不得同時選擇其他 SDG。")
+    publication = _editable_detail_publication(actor=actor, publication_id=publication_id)
+    publication.sdg_assignments.all().delete()
+    PublicationSDGAssignment.objects.bulk_create([
+        PublicationSDGAssignment(publication=publication, goal=goal) for goal in set(goals)
+    ])
+    record_event(actor=actor, action="publication.sdgs_saved", target=publication,
+                 request_id=_request_id(request_id), metadata={"codes": sorted(codes)})
 
 
 def _editable_author_publication(*, actor, publication_id):
@@ -187,6 +284,27 @@ def validate_submission_completeness(publication):
         has_evidence = has_evidence or publication.series.current_official_version.documents.filter(is_active=True).exists()
     if not has_evidence:
         errors.append("請至少上傳一份有效佐證文件。")
+    # RC4 detail validation is additive: reconciled/new journal records gain
+    # formal stage-specific checks, while historical records without a detail
+    # row remain valid under the frozen pre-existing completeness contract.
+    try:
+        journal_detail = publication.journal_detail
+    except JournalArticleDetail.DoesNotExist:
+        journal_detail = None
+    if journal_detail:
+        active_document_types = set(
+            publication.documents.filter(is_active=True).values_list("document_type", flat=True)
+        )
+        if publication.publication_stage == PublicationRecord.PublicationStage.ACCEPTED:
+            if not publication.accepted_date:
+                errors.append("已接受的期刊論文必須填寫接受日期。")
+            if "acceptance_letter" not in active_document_types:
+                errors.append("已接受的期刊論文必須上傳接受證明。")
+        elif publication.publication_stage == PublicationRecord.PublicationStage.PUBLISHED:
+            if not all([publication.volume, publication.issue, publication.pages_or_article_number, publication.publication_date]):
+                errors.append("已刊登的期刊論文必須填寫卷號、期別、頁數與刊登日期。")
+            if "journal_proof" not in active_document_types:
+                errors.append("已刊登的期刊論文必須上傳期刊佐證。")
     return errors
 
 

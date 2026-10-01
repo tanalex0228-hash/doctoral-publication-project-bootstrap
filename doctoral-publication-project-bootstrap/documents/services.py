@@ -22,14 +22,19 @@ def _sniff(data):
     return None
 
 
-def _prepare(upload):
+def _prepare(upload, *, document_type):
     filename = Path(upload.name).name
     extension = Path(filename).suffix.lower()
-    if extension not in ALLOWED: raise ValidationError("Only PDF, JPG/JPEG, and PNG evidence files are accepted.")
+    is_conference_evidence = document_type == SourceDocument.DocumentType.CONFERENCE_EVIDENCE
+    allowed = {".pdf": "application/pdf"} if is_conference_evidence else ALLOWED
+    max_file_size = 10 * 1024 * 1024 if is_conference_evidence else MAX_FILE_SIZE
+    if extension not in allowed:
+        raise ValidationError("學術會議佐證僅接受 PDF 檔案。" if is_conference_evidence else "Only PDF, JPG/JPEG, and PNG evidence files are accepted.")
     data = upload.read()
-    if not data or len(data) > MAX_FILE_SIZE: raise ValidationError("Evidence file must be non-empty and no larger than 25 MB.")
+    if not data or len(data) > max_file_size:
+        raise ValidationError("學術會議佐證必須為非空白且不超過 10 MB 的 PDF 檔案。" if is_conference_evidence else "Evidence file must be non-empty and no larger than 25 MB.")
     detected = _sniff(data)
-    if detected != ALLOWED[extension]: raise ValidationError("File extension and detected MIME type do not match.")
+    if detected != allowed[extension]: raise ValidationError("File extension and detected MIME type do not match.")
     declared = getattr(upload, "content_type", None)
     if declared and declared != detected: raise ValidationError("Declared MIME type does not match file content.")
     return filename, data, detected, hashlib.sha256(data).hexdigest()
@@ -40,7 +45,7 @@ def upload_document(*, actor, publication, upload, document_type=SourceDocument.
     editable_statuses = {publication.WorkflowStatus.DRAFT, publication.WorkflowStatus.RETURNED}
     if publication.workflow_status not in editable_statuses or not (can_edit_publication(actor, publication) or is_staff_actor(actor)):
         raise PermissionDenied("Evidence may only be uploaded to a draft or returned publication by its owner or staff.")
-    filename, data, mime_type, checksum = _prepare(upload)
+    filename, data, mime_type, checksum = _prepare(upload, document_type=document_type)
     key = f"evidence/{uuid.uuid4().hex}"
     saved_key = default_storage.save(key, ContentFile(data))
     try:
