@@ -283,9 +283,14 @@ def validate_submission_completeness(publication):
         errors.append("請選擇成果類型。")
     if not publication.authors.exists():
         errors.append("請至少新增一位作者。")
-    has_evidence = publication.documents.filter(is_active=True).exists()
+    active_documents = publication.documents.filter(is_active=True)
+    has_evidence = active_documents.exists()
     if publication.is_revision and publication.series.current_official_version_id:
-        has_evidence = has_evidence or publication.series.current_official_version.documents.filter(is_active=True).exists()
+        # A revision starts as a proposed metadata change.  Until the student
+        # deliberately replaces evidence, the approved record's active
+        # evidence remains the governing evidence for completeness checks.
+        active_documents = active_documents | publication.series.current_official_version.documents.filter(is_active=True)
+        has_evidence = active_documents.exists()
     if not has_evidence:
         errors.append("請至少上傳一份有效佐證文件。")
     # RC4 detail validation is additive: reconciled/new journal records gain
@@ -296,9 +301,7 @@ def validate_submission_completeness(publication):
     except JournalArticleDetail.DoesNotExist:
         journal_detail = None
     if journal_detail:
-        active_document_types = set(
-            publication.documents.filter(is_active=True).values_list("document_type", flat=True)
-        )
+        active_document_types = set(active_documents.values_list("document_type", flat=True))
         if publication.publication_stage == PublicationRecord.PublicationStage.ACCEPTED:
             if not publication.accepted_date:
                 errors.append("已接受的期刊論文必須填寫接受日期。")

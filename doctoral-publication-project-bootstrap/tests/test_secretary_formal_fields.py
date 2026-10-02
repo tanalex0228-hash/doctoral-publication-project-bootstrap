@@ -175,6 +175,28 @@ class SecretaryFormalFieldTests(ContractFixture):
             submit_publication(actor=self.student_user, publication_id=published.id)
         self.assertIn("卷號", error.exception.messages[0])
 
+    def test_accepted_journal_revision_can_reuse_original_active_acceptance_evidence(self):
+        """A metadata-only revision must not require a duplicate acceptance letter."""
+        accepted = self.publication()
+        accepted.publication_stage = accepted.PublicationStage.ACCEPTED
+        accepted.accepted_date = date(2026, 1, 1)
+        accepted.save(update_fields=["publication_stage", "accepted_date"])
+        save_journal_article_detail(actor=self.student_user, publication_id=accepted.id, **self.journal_values())
+        self.complete(accepted)
+        with TemporaryDirectory() as directory, override_settings(MEDIA_ROOT=Path(directory)):
+            upload_document(
+                actor=self.student_user, publication=accepted,
+                document_type=SourceDocument.DocumentType.ACCEPTANCE_LETTER,
+                upload=SimpleUploadedFile("accepted.pdf", b"%PDF-1.4 accepted", content_type="application/pdf"),
+            )
+            from publications.services import submit_publication
+            submit_publication(actor=self.student_user, publication_id=accepted.id)
+            approve_publication(actor=self.staff, publication_id=accepted.id)
+            revision = create_revision(actor=self.student_user, publication_id=accepted.id)
+            submit_publication(actor=self.student_user, publication_id=revision.id)
+        revision.refresh_from_db()
+        self.assertEqual(revision.workflow_status, PublicationRecord.WorkflowStatus.SUBMITTED)
+
     def test_detail_pages_are_owner_editable_and_keep_other_students_out(self):
         publication = self.publication()
         self.client.force_login(self.student_user)
