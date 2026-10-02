@@ -10,12 +10,12 @@
 </div><div class="card-footer bg-white text-end"><button class="btn btn-primary" type="submit">下一步</button></div></form>
 {% else %}
 <form method="post" class="card shadow-sm"><div class="card-body">{% csrf_token %}{% if detail_form %}<input type="hidden" name="type_flow" value="1">{% endif %}
-  {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+  {% if form.non_field_errors or detail_form.non_field_errors %}<div class="alert alert-danger"><strong>請修正下列資料：</strong>{{ form.non_field_errors }}{{ detail_form.non_field_errors }}</div>{% endif %}
   {% if selected_type %}<div class="alert alert-info py-2">成果類型：<strong>{{ selected_type.display_name }}</strong></div>{% endif %}
   <div class="row g-3">
     {% for field in form %}
       {% if field.name not in hidden_root_fields %}
-      <div class="{% if field.name == 'title' or field.name == 'abstract' or field.name == 'indices' or field.name == 'research_fields' %}col-12{% else %}col-md-6{% endif %}">
+      <div class="{% if field.name == 'title' or field.name == 'abstract' or field.name == 'indices' or field.name == 'research_fields' %}col-12{% else %}col-md-6{% endif %}" data-root-name="{{ field.name }}">
         {% if field.field.widget.input_type == 'checkbox' %}
           <div class="form-check">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
         {% else %}
@@ -44,15 +44,18 @@
 (() => {
   const type = document.getElementById('id_journal_type');
   const order = document.getElementById('id_student_author_order');
-  if (!type || !order) return;
-  const show = (names, visible) => names.forEach(name => { const node = document.querySelector(`[data-name="${name}"]`); if (node) node.hidden = !visible; });
+  const stage = document.getElementById('id_publication_stage');
+  if (!type || !order || !stage) return;
+  const show = (names, visible, selector = 'data-name') => names.forEach(name => { const node = document.querySelector(`[${selector}="${name}"]`); if (node) node.hidden = !visible; });
   function refresh() {
     show(['international_journal_rank','impact_factor'], ['sci','ssci'].includes(type.value));
     show(['taiwan_journal_level'], ['tssci','thci'].includes(type.value));
     show(['custom_journal_type'], ['college_recognized','other'].includes(type.value));
     show(['student_author_order_reason'], order.value === 'fourth_or_later');
+    show(['accepted_date'], stage.value === 'accepted', 'data-root-name');
+    show(['volume','issue','pages_or_article_number','publication_date'], stage.value === 'published', 'data-root-name');
   }
-  type.addEventListener('change', refresh); order.addEventListener('change', refresh); refresh();
+  type.addEventListener('change', refresh); order.addEventListener('change', refresh); stage.addEventListener('change', refresh); refresh();
 })();
 </script>
 {% endif %}

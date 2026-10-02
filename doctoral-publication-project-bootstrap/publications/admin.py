@@ -12,18 +12,33 @@ from review.services import approve_publication, archive_publication, restore_pu
 class PublicationAuthorInline(admin.TabularInline):
     model = PublicationAuthor
     extra = 0
+    can_delete = False
+    readonly_fields = tuple(field.name for field in PublicationAuthor._meta.fields)
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 class JournalArticleDetailInline(admin.StackedInline):
     model = JournalArticleDetail
     extra = 0
     max_num = 1
+    can_delete = False
+    readonly_fields = tuple(field.name for field in JournalArticleDetail._meta.fields)
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 class ConferenceDetailInline(admin.StackedInline):
     model = ConferenceDetail
     extra = 0
     max_num = 1
+    can_delete = False
+    readonly_fields = tuple(field.name for field in ConferenceDetail._meta.fields)
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 @admin.register(PublicationRecord)
 class PublicationRecordAdmin(admin.ModelAdmin):
@@ -31,12 +46,22 @@ class PublicationRecordAdmin(admin.ModelAdmin):
     list_filter = ("workflow_status", "is_published", "visibility_scope", "publication_type")
     search_fields = ("title", "doi", "journal_or_conference_name", "owner_student__student_number")
     inlines = (PublicationAuthorInline, JournalArticleDetailInline, ConferenceDetailInline)
-    readonly_fields = ("normalized_title", "normalized_doi", "workflow_status", "is_published", "visibility_scope", "submitted_at", "approved_at", "approved_by")
+    readonly_fields = tuple(field.name for field in PublicationRecord._meta.fields) + ("indices", "research_fields")
     actions = ("approve_selected", "return_selected", "archive_selected", "publish_public_selected")
 
     def has_delete_permission(self, request, obj=None):
         """Records are governed through the review/archive workflow, never hard-deleted."""
         return False
+
+    def has_add_permission(self, request):
+        """A governed aggregate is created through the student/service workflow."""
+        return False
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """Workflow actions remain available on the changelist, never raw edits."""
+        if request.method not in {"GET", "HEAD"}:
+            raise PermissionDenied("Publication data is changed through governed services only.")
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
     def _run_workflow_action(self, request, queryset, service, *, success, **kwargs):
         completed = 0
@@ -84,12 +109,29 @@ class PublicationRecordAdmin(admin.ModelAdmin):
         if failures:
             self.message_user(request, "；".join(failures), level="ERROR")
 
-admin.site.register(PublicationIndexAssignment)
-admin.site.register(PublicationFieldAssignment)
-admin.site.register(PublicationSDGAssignment)
+class GovernedPublicationRelatedAdmin(admin.ModelAdmin):
+    """Read-only troubleshooting view for data owned by PublicationRecord."""
+    readonly_fields = ()
+
+    def get_readonly_fields(self, request, obj=None):
+        return tuple(field.name for field in self.model._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return request.method in {"GET", "HEAD"}
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+admin.site.register(PublicationIndexAssignment, GovernedPublicationRelatedAdmin)
+admin.site.register(PublicationFieldAssignment, GovernedPublicationRelatedAdmin)
+admin.site.register(PublicationSDGAssignment, GovernedPublicationRelatedAdmin)
 admin.site.register(Country)
 admin.site.register(SustainableDevelopmentGoal)
 admin.site.register(ConferencePresentationMode)
-admin.site.register(ConferenceDetail)
-admin.site.register(ConferenceParticipantCountry)
-admin.site.register(ConferencePresentationModeAssignment)
+admin.site.register(ConferenceDetail, GovernedPublicationRelatedAdmin)
+admin.site.register(ConferenceParticipantCountry, GovernedPublicationRelatedAdmin)
+admin.site.register(ConferencePresentationModeAssignment, GovernedPublicationRelatedAdmin)

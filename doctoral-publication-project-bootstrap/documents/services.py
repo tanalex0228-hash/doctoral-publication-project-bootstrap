@@ -46,6 +46,12 @@ def upload_document(*, actor, publication, upload, document_type=SourceDocument.
     if publication.workflow_status not in editable_statuses or not (can_edit_publication(actor, publication) or is_staff_actor(actor)):
         raise PermissionDenied("Evidence may only be uploaded to a draft or returned publication by its owner or staff.")
     filename, data, mime_type, checksum = _prepare(upload, document_type=document_type)
+    if supersedes and (
+        supersedes.publication_id != publication.id or not supersedes.is_active
+    ):
+        raise ValidationError("Only an active document of the same publication may be replaced.")
+    if SourceDocument.objects.filter(publication=publication, checksum_sha256=checksum).exists():
+        raise ValidationError("相同內容的佐證文件已存在，請勿重複上傳。")
     key = f"evidence/{uuid.uuid4().hex}"
     saved_key = default_storage.save(key, ContentFile(data))
     try:
@@ -58,6 +64,26 @@ def upload_document(*, actor, publication, upload, document_type=SourceDocument.
         default_storage.delete(saved_key)
         raise
     record_event(actor=actor, action="document.uploaded" if not supersedes else "document.replaced", target=document, request_id=request_id, metadata={"document_type": document_type})
+    return document
+
+
+@transaction.atomic
+def retire_document(*, actor, document, request_id=None):
+    """Hide an editable evidence version while retaining its provenance and audit trail."""
+    publication = document.publication
+    editable_statuses = {publication.WorkflowStatus.DRAFT, publication.WorkflowStatus.RETURNED}
+    if (
+        not document.is_active
+        or publication.workflow_status not in editable_statuses
+        or not (can_edit_publication(actor, publication) or is_staff_actor(actor))
+    ):
+        raise PermissionDenied("This evidence version cannot be removed in its current state.")
+    document.is_active = False
+    document.save(update_fields=["is_active"])
+    record_event(
+        actor=actor, action="document.retired", target=document, request_id=request_id,
+        metadata={"publication_id": str(publication.id), "document_type": document.document_type},
+    )
     return document
 
 

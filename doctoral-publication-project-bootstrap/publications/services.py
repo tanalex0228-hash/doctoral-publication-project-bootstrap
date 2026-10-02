@@ -156,10 +156,12 @@ def _editable_detail_publication(*, actor, publication_id):
 @transaction.atomic
 def save_journal_article_detail(*, actor, publication_id, request_id=None, **fields):
     publication = _editable_detail_publication(actor=actor, publication_id=publication_id)
-    detail, _ = JournalArticleDetail.objects.get_or_create(publication=publication, defaults=fields)
-    if detail.pk and any(getattr(detail, field) != value for field, value in fields.items()):
-        for field, value in fields.items():
-            setattr(detail, field, value)
+    try:
+        detail = publication.journal_detail
+    except JournalArticleDetail.DoesNotExist:
+        detail = JournalArticleDetail(publication=publication)
+    for field, value in fields.items():
+        setattr(detail, field, value)
     detail.full_clean()
     detail.save()
     record_event(actor=actor, action="publication.journal_detail_saved", target=publication,
@@ -172,10 +174,12 @@ def save_conference_detail(*, actor, publication_id, participant_countries=(), p
     if len(set(participant_countries)) > 5:
         raise ValidationError("與會人員國家最多可選擇 5 個。")
     publication = _editable_detail_publication(actor=actor, publication_id=publication_id)
-    detail, _ = ConferenceDetail.objects.get_or_create(publication=publication, defaults=fields)
-    if detail.pk and any(getattr(detail, field) != value for field, value in fields.items()):
-        for field, value in fields.items():
-            setattr(detail, field, value)
+    try:
+        detail = publication.conference_detail
+    except ConferenceDetail.DoesNotExist:
+        detail = ConferenceDetail(publication=publication)
+    for field, value in fields.items():
+        setattr(detail, field, value)
     detail.full_clean()
     detail.save()
     detail.participant_country_assignments.all().delete()

@@ -10,6 +10,7 @@ from publications.models import PublicationRecord
 from publications.permissions import is_staff_actor
 from publications.querysets import is_official_publication, official_publications
 from publications.services import set_published, set_visibility
+from publications.type_codes import publication_detail_kind
 from taxonomy.models import PublicationType
 from .forms import PublicationSettingsForm, ReturnForRevisionForm, RevokeApprovalForm
 from .models import PublicationTransition
@@ -22,9 +23,14 @@ def _require_review_role(request):
 
 
 def _review_queryset():
-    return PublicationRecord.objects.select_related("owner_student", "publication_type").prefetch_related(
+    return PublicationRecord.objects.select_related(
+        "owner_student", "publication_type", "journal_detail", "journal_detail__publication_country",
+        "conference_detail", "conference_detail__location_country",
+    ).prefetch_related(
         "owner_student__advisor_relations__professor", "authors", "indices", "research_fields", "documents",
-        "review_decisions", "transitions",
+        "review_decisions", "transitions", "sdg_assignments__goal",
+        "conference_detail__participant_country_assignments__country",
+        "conference_detail__presentation_mode_assignments__mode",
     )
 
 
@@ -77,6 +83,7 @@ def review_detail(request, publication_id):
             PublicationRecord.WorkflowStatus.APPROVED,
             PublicationRecord.WorkflowStatus.ARCHIVED,
         } and is_official_publication(publication),
+        "detail_kind": publication_detail_kind(publication.publication_type),
     })
 
 

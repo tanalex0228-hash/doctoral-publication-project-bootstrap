@@ -8,6 +8,7 @@ from professors.models import Professor
 from publications.models import PublicationRecord
 from publications.permissions import is_advisor_actor, visible_publications_for
 from publications.querysets import official_publications
+from publications.type_codes import publication_detail_kind
 
 
 @login_required
@@ -57,12 +58,16 @@ def _advisor_publications(user, student):
     if student is not None:
         publications = publications.filter(owner_student=student)
     return publications.select_related(
-        "owner_student", "publication_type"
+        "owner_student", "publication_type", "journal_detail", "journal_detail__publication_country",
+        "conference_detail", "conference_detail__location_country",
     ).prefetch_related(
         "authors",
         "indices",
         "research_fields",
         "documents",
+        "sdg_assignments__goal",
+        "conference_detail__participant_country_assignments__country",
+        "conference_detail__presentation_mode_assignments__mode",
         "owner_student__advisor_relations__professor",
     )
 
@@ -111,4 +116,5 @@ def advisor_publication_detail(request, publication_id):
         "professor": professor,
         "publication": publication,
         "documents": [document for document in publication.documents.all() if document.is_active],
+        "detail_kind": publication_detail_kind(publication.publication_type),
     })
