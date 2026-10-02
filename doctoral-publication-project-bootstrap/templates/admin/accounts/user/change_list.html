@@ -1,0 +1,8 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  {% if can_bulk_manage_accounts %}
+    <li><a href="{% url 'admin:accounts_user_bulk_import' %}">批量建立使用者</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

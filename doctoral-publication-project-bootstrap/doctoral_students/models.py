@@ -15,7 +15,7 @@ class DoctoralStudentProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="doctoral_profile")
     student_number = models.CharField(max_length=50, unique=True, db_index=True)
     display_name = models.CharField(max_length=200, db_index=True)
-    admission_year = models.PositiveSmallIntegerField(db_index=True)
+    admission_year = models.PositiveSmallIntegerField(null=True, blank=True, db_index=True)
     enrollment_status = models.CharField(max_length=16, choices=EnrollmentStatus.choices, default=EnrollmentStatus.ACTIVE, db_index=True)
     primary_field = models.ForeignKey("taxonomy.ResearchField", on_delete=models.PROTECT, null=True, blank=True, related_name="primary_students")
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div id="content-main">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <fieldset class="module aligned">
+        <h2>Excel 匯入規則</h2>
+        <p>請使用 .xlsx 檔，第一列欄位與順序必須完全為：序號、姓名、帳號、學號、身份、單位、預設密碼、管理介面、密碼登入、權限群組、入學年度。</p>
+        <p>序號與單位僅供原始資料識別；不會寫入帳號資料。姓名會作為使用者名稱，帳號會作為電子郵件。身份與權限群組請填 teacher/student/admin；管理介面與密碼登入可填 v/y 或 x/n。學生必填學號；入學年度可留白。</p>
+        {{ form.as_p }}
+      </fieldset>
+      <div class="submit-row"><input type="submit" value="驗證並建立使用者" class="default"></div>
+    </form>
+  </div>
+{% endblock %}
