@@ -1,8 +1,12 @@
 import csv
+from io import BytesIO
 
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
+from openpyxl import Workbook
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 
 from config.pagination import paginate_queryset
 from doctoral_students.models import DoctoralStudentProfile
@@ -34,6 +38,52 @@ def _filtered_records(request):
     return form, filtered_approved_publications(**form.cleaned_data)
 
 
+PUBLICATION_EXPORT_HEADERS = [
+    "學生", "學號", "指導教授", "成果標題", "成果類型", "Publication Index", "研究領域", "作者",
+    "期刊／會議", "發表日期", "接受日期", "DOI", "ISSN", "語言", "核准日期", "Visibility", "發佈狀態",
+]
+
+
+def _xlsx_response(*, filename, worksheet_title, headers, rows):
+    """Build a safe Excel download without exposing data outside the approved query."""
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = worksheet_title[:31]
+    worksheet.append(headers)
+    for cell in worksheet[1]:
+        cell.font = Font(bold=True)
+    worksheet.freeze_panes = "A2"
+    for row in rows:
+        worksheet.append([csv_safe_cell(value) for value in row])
+    worksheet.auto_filter.ref = worksheet.dimensions
+    for index, column in enumerate(worksheet.columns, start=1):
+        width = min(max((len(str(cell.value or "")) for cell in column), default=0) + 2, 40)
+        worksheet.column_dimensions[get_column_letter(index)].width = width
+    stream = BytesIO()
+    workbook.save(stream)
+    response = HttpResponse(
+        stream.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _valid_filtered_records(request):
+    form, records = _filtered_records(request)
+    return records if form.is_valid() else records.none()
+
+
+def _student_statistics_rows(records, *, sort):
+    for student in student_statistics_table(records, sort=sort):
+        yield [
+            student.display_name, student.student_number, student.approved_total, student.journal_total,
+            student.conference_total, student.first_author_total, student.corresponding_author_total,
+            student.advisor_coauthored_total, student.publication_index_summary or "",
+            student.advisor_names or "", student.latest_publication_date or "", student.first_publication_type or "",
+        ]
+
+
 @login_required
 def statistics_dashboard(request):
     _require_statistics_role(request)
@@ -60,6 +110,15 @@ def approved_publication_list(request):
 
 
 @login_required
+def approved_xlsx_export(request):
+    _require_statistics_role(request)
+    return _xlsx_response(
+        filename="approved-publications.xlsx", worksheet_title="已核准成果",
+        headers=PUBLICATION_EXPORT_HEADERS, rows=export_ready_rows(_valid_filtered_records(request)),
+    )
+
+
+@login_required
 def student_statistics(request):
     _require_statistics_role(request)
     form, records = _filtered_records(request)
@@ -77,6 +136,18 @@ def student_statistics(request):
 
 
 @login_required
+def student_statistics_xlsx_export(request):
+    _require_statistics_role(request)
+    requested_sort = request.GET.get("sort", "name")
+    sort = requested_sort if requested_sort in STUDENT_SORTS else "name"
+    return _xlsx_response(
+        filename="approved-student-statistics.xlsx", worksheet_title="學生正式成果統計",
+        headers=["學生", "學號", "正式數", "Journal", "Conference", "第一作者", "通訊作者", "與指導教授合著", "Index 概況", "指導教授", "最近發表", "成果類型"],
+        rows=_student_statistics_rows(_valid_filtered_records(request), sort=sort),
+    )
+
+
+@login_required
 def student_statistics_detail(request, student_id):
     _require_statistics_role(request)
     student = get_object_or_404(DoctoralStudentProfile, pk=student_id)
@@ -86,6 +157,18 @@ def student_statistics_detail(request, student_id):
         "publications": publications,
         "summary": student_summary(student),
     })
+
+
+@login_required
+def student_statistics_detail_xlsx_export(request, student_id):
+    _require_statistics_role(request)
+    student = get_object_or_404(DoctoralStudentProfile, pk=student_id)
+    return _xlsx_response(
+        filename=f"approved-publications-{student.student_number}.xlsx",
+        worksheet_title=f"{student.display_name}成果",
+        headers=PUBLICATION_EXPORT_HEADERS,
+        rows=export_ready_rows(approved_publications_for_student(student)),
+    )
 
 
 @login_required
@@ -100,6 +183,15 @@ def export_ready_data(request):
         "page_obj": page_obj,
         "pagination_query": pagination_query,
     })
+
+
+@login_required
+def export_ready_xlsx_export(request):
+    _require_statistics_role(request)
+    return _xlsx_response(
+        filename="export-ready-approved-publications.xlsx", worksheet_title="匯出準備資料",
+        headers=PUBLICATION_EXPORT_HEADERS, rows=export_ready_rows(_valid_filtered_records(request)),
+    )
 
 
 @login_required

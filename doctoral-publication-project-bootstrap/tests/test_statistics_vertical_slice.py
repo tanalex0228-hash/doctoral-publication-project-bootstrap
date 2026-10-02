@@ -1,10 +1,12 @@
 from datetime import date
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
+from openpyxl import load_workbook
 
 from accounts.models import Role, User
 from advising.models import StudentAdvisor
@@ -165,6 +167,28 @@ class StatisticsVerticalSliceTests(ContractFixture):
         for user in (self.student_user, self.advisor_user, self.is_staff_only):
             self.client.force_login(user)
             self.assertEqual(self.client.get(reverse("statistics:approved")).status_code, 404)
+
+    def test_each_statistics_list_has_an_approved_only_excel_export(self):
+        self.client.force_login(self.staff)
+        routes = (
+            (reverse("statistics:approved_xlsx"), {"year": 2024}, "Approved journal 2024", "Approved conference 2025"),
+            (reverse("statistics:students_xlsx"), {"year": 2024}, self.student.display_name, self.other_student.display_name),
+            (reverse("statistics:student_detail_xlsx", args=[self.student.id]), {}, "Approved journal 2024", "Approved conference 2025"),
+            (reverse("statistics:export_ready_xlsx"), {"year": 2024}, "Approved journal 2024", "Approved conference 2025"),
+        )
+        for url, params, included, excluded in routes:
+            response = self.client.get(url, params)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(
+                response["Content-Type"],
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            worksheet = load_workbook(BytesIO(response.content), read_only=True).active
+            values = "\n".join(
+                str(value) for row in worksheet.iter_rows(values_only=True) for value in row if value is not None
+            )
+            self.assertIn(included, values)
+            self.assertNotIn(excluded, values)
 
     def test_draft_submitted_and_returned_never_enter_official_statistics(self):
         self.assertEqual(approved_publications().count(), 2)
