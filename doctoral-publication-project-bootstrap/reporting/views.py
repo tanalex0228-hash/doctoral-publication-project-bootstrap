@@ -45,6 +45,21 @@ def statistics_dashboard(request):
 
 
 @login_required
+def approved_publication_list(request):
+    """Staff drill-down for the approved-only dashboard total."""
+    _require_statistics_role(request)
+    form, records = _filtered_records(request)
+    publications = export_ready_publications(records)
+    page_obj, pagination_query = paginate_queryset(request, publications)
+    return render(request, "statistics/approved_list.html", {
+        "filter_form": form,
+        "publications": page_obj,
+        "page_obj": page_obj,
+        "pagination_query": pagination_query,
+    })
+
+
+@login_required
 def student_statistics(request):
     _require_statistics_role(request)
     form, records = _filtered_records(request)

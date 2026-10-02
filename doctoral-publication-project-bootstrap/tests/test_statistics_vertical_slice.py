@@ -146,6 +146,26 @@ class StatisticsVerticalSliceTests(ContractFixture):
             self.client.force_login(user)
             self.assertEqual(self.client.get(reverse("statistics:dashboard")).status_code, 200)
 
+    def test_dashboard_cards_link_to_filtered_approved_and_student_drill_downs(self):
+        self.client.force_login(self.staff)
+        dashboard = self.client.get(reverse("statistics:dashboard"), {"year": 2024})
+        self.assertContains(dashboard, f'{reverse("statistics:approved")}?year=2024')
+        self.assertContains(dashboard, f'{reverse("statistics:students")}?year=2024')
+
+        approved = self.client.get(reverse("statistics:approved"), {"year": 2024})
+        self.assertContains(approved, self.approved_a.title)
+        self.assertNotContains(approved, self.approved_b.title)
+        self.assertNotContains(approved, self.draft.title)
+
+        students = self.client.get(reverse("statistics:students"))
+        self.assertContains(students, reverse("statistics:student_detail", args=[self.student.id]))
+        self.assertContains(students, self.student.display_name)
+
+    def test_approved_list_keeps_statistics_permission_boundary(self):
+        for user in (self.student_user, self.advisor_user, self.is_staff_only):
+            self.client.force_login(user)
+            self.assertEqual(self.client.get(reverse("statistics:approved")).status_code, 404)
+
     def test_draft_submitted_and_returned_never_enter_official_statistics(self):
         self.assertEqual(approved_publications().count(), 2)
         self.client.force_login(self.staff)
