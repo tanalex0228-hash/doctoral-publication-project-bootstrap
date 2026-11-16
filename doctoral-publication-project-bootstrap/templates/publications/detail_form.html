@@ -21,12 +21,11 @@
   const show = (names, visible) => names.forEach(name => { const node = document.querySelector(`[data-name="${name}"]`); if (node) node.hidden = !visible; });
   function refresh() {
     const value = type.value;
-    show(['international_journal_rank','impact_factor'], ['sci','ssci'].includes(value));
+    show(['international_journal_rank'], ['sci','ssci'].includes(value));
     show(['taiwan_journal_level'], ['tssci','thci'].includes(value));
     show(['custom_journal_type'], ['college_recognized','other'].includes(value));
-    show(['student_author_order_reason'], document.getElementById('id_student_author_order').value === 'fourth_or_later');
   }
-  type.addEventListener('change', refresh); document.getElementById('id_student_author_order').addEventListener('change', refresh); refresh();
+  type.addEventListener('change', refresh); refresh();
 })();
 </script>
 {% endif %}

@@ -89,6 +89,12 @@ def is_active_advisor(user, student):
 
 def can_view_publication(user, publication):
     """Apply the single official-version and visibility contract to one record."""
+    if publication.is_purged:
+        return False
+    # Trash is an administrative recovery area, never a hidden alternate
+    # portal. This also prevents stale document UUIDs from exposing evidence.
+    if publication.is_trashed:
+        return is_staff_actor(user)
     if is_staff_actor(user):
         return True
     if user and user.is_authenticated and publication.owner_student.user_id == user.id:
@@ -119,12 +125,15 @@ def can_view_publication(user, publication):
 
 
 def can_edit_publication(user, publication):
+    if publication.is_trashed or publication.is_purged:
+        return False
     return is_staff_actor(user) or bool(
         user
         and user.is_authenticated
         and publication.owner_student.user_id == user.id
         and publication.workflow_status in {
             PublicationRecord.WorkflowStatus.DRAFT,
+            PublicationRecord.WorkflowStatus.SUBMITTED,
             PublicationRecord.WorkflowStatus.RETURNED,
         }
     )

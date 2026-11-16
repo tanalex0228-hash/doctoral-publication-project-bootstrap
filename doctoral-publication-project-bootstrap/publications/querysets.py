@@ -20,6 +20,8 @@ def official_publications():
     return PublicationRecord.objects.filter(
         series__current_official_version_id=F("pk"),
         approval_revoked_at__isnull=True,
+        is_trashed=False,
+        is_purged=False,
         workflow_status__in=OFFICIAL_WORKFLOW_STATUSES,
     )
 

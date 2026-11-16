@@ -9,8 +9,8 @@ from config.pagination import paginate_queryset
 from publications.models import PublicationRecord
 from publications.permissions import is_staff_actor
 from publications.querysets import is_official_publication, official_publications
-from publications.services import set_published, set_visibility
-from publications.type_codes import publication_detail_kind
+from publications.services import set_published, set_visibility, trash_publication
+from publications.type_codes import CONFERENCE_TYPE_SLUGS, JOURNAL_TYPE_SLUGS, publication_detail_kind
 from taxonomy.models import PublicationType
 from .forms import PublicationSettingsForm, ReturnForRevisionForm, RevokeApprovalForm
 from .models import PublicationTransition
@@ -35,9 +35,25 @@ def _review_queryset():
 
 
 @login_required
-def review_queue(request):
+def _review_list(request, *, kind=None):
     _require_review_role(request)
-    publications = _review_queryset().filter(workflow_status=PublicationRecord.WorkflowStatus.SUBMITTED)
+    publications = _review_queryset().filter(is_purged=False)
+    if kind == "journal":
+        publications = publications.filter(publication_type__slug__in=JOURNAL_TYPE_SLUGS)
+    elif kind == "conference":
+        publications = publications.filter(publication_type__slug__in=CONFERENCE_TYPE_SLUGS)
+    status = request.GET.get("status", PublicationRecord.WorkflowStatus.SUBMITTED)
+    allowed_statuses = {
+        PublicationRecord.WorkflowStatus.SUBMITTED,
+        PublicationRecord.WorkflowStatus.RETURNED,
+        PublicationRecord.WorkflowStatus.APPROVED,
+        "trash",
+    }
+    if status not in allowed_statuses:
+        status = PublicationRecord.WorkflowStatus.SUBMITTED
+    publications = publications.filter(is_trashed=status == "trash")
+    if status != "trash":
+        publications = publications.filter(workflow_status=status)
     query = request.GET.get("q", "").strip()
     publication_type = request.GET.get("type", "")
     if query:
@@ -62,29 +78,60 @@ def review_queue(request):
         "selected_type": publication_type,
         "query": query,
         "sort": sort,
+        "status": status,
+        "kind": kind,
+        "page_title": "期刊論文清單" if kind == "journal" else "學術會議清單" if kind == "conference" else "秘書審核清單",
     })
+
+
+@login_required
+def review_queue(request):
+    """Compatibility queue: all types, initially limited to pending review."""
+    return _review_list(request)
+
+
+@login_required
+def journal_list(request):
+    return _review_list(request, kind="journal")
+
+
+@login_required
+def conference_list(request):
+    return _review_list(request, kind="conference")
 
 
 @login_required
 def review_detail(request, publication_id):
     _require_review_role(request)
-    publication = get_object_or_404(_review_queryset(), pk=publication_id)
+    publication = get_object_or_404(_review_queryset().filter(is_purged=False), pk=publication_id)
     return render(request, "review/review_detail.html", {
         "publication": publication,
         "return_form": ReturnForRevisionForm(),
         "revoke_form": RevokeApprovalForm(),
         "can_decide": publication.workflow_status == PublicationRecord.WorkflowStatus.SUBMITTED,
-        "can_archive": publication.workflow_status == PublicationRecord.WorkflowStatus.APPROVED and is_official_publication(publication),
-        "can_revoke": publication.workflow_status in {
-            PublicationRecord.WorkflowStatus.APPROVED,
-            PublicationRecord.WorkflowStatus.ARCHIVED,
-        } and is_official_publication(publication),
-        "can_configure_publication": publication.workflow_status in {
-            PublicationRecord.WorkflowStatus.APPROVED,
-            PublicationRecord.WorkflowStatus.ARCHIVED,
-        } and is_official_publication(publication),
         "detail_kind": publication_detail_kind(publication.publication_type),
     })
+
+
+@login_required
+@require_POST
+def trash_selected(request):
+    _require_review_role(request)
+    publication_ids = request.POST.getlist("publication_ids")
+    if not publication_ids:
+        messages.error(request, "請先選取至少一筆成果。")
+    else:
+        completed = 0
+        for publication in PublicationRecord.objects.filter(pk__in=publication_ids, is_trashed=False):
+            try:
+                trash_publication(actor=request.user, publication_id=publication.id)
+            except (PermissionDenied, ValidationError) as error:
+                messages.error(request, f"{publication.title}：{error}")
+            else:
+                completed += 1
+        if completed:
+            messages.success(request, f"已將 {completed} 筆成果移至垃圾桶；資料、文件與稽核紀錄均保留。")
+    return redirect(request.POST.get("next") or "review:queue")
 
 
 @login_required

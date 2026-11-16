@@ -43,19 +43,16 @@
 <script>
 (() => {
   const type = document.getElementById('id_journal_type');
-  const order = document.getElementById('id_student_author_order');
   const stage = document.getElementById('id_publication_stage');
-  if (!type || !order || !stage) return;
+  if (!type || !stage) return;
   const show = (names, visible, selector = 'data-name') => names.forEach(name => { const node = document.querySelector(`[${selector}="${name}"]`); if (node) node.hidden = !visible; });
   function refresh() {
-    show(['international_journal_rank','impact_factor'], ['sci','ssci'].includes(type.value));
+    show(['international_journal_rank'], ['sci','ssci'].includes(type.value));
     show(['taiwan_journal_level'], ['tssci','thci'].includes(type.value));
     show(['custom_journal_type'], ['college_recognized','other'].includes(type.value));
-    show(['student_author_order_reason'], order.value === 'fourth_or_later');
-    show(['accepted_date'], stage.value === 'accepted', 'data-root-name');
-    show(['volume','issue','pages_or_article_number','publication_date'], stage.value === 'published', 'data-root-name');
+    show(['publication_date'], stage.value === 'published', 'data-root-name');
   }
-  type.addEventListener('change', refresh); order.addEventListener('change', refresh); stage.addEventListener('change', refresh); refresh();
+  type.addEventListener('change', refresh); stage.addEventListener('change', refresh); refresh();
 })();
 </script>
 {% endif %}

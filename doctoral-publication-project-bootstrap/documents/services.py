@@ -11,8 +11,8 @@ from audit.services import record_event
 from publications.permissions import can_edit_publication, can_download_document, is_staff_actor
 from .models import SourceDocument
 
-MAX_FILE_SIZE = 25 * 1024 * 1024
-ALLOWED = {".pdf": "application/pdf", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
+MAX_FILE_SIZE = 10 * 1024 * 1024
+ALLOWED = {".pdf": "application/pdf"}
 
 
 def _sniff(data):
@@ -25,14 +25,13 @@ def _sniff(data):
 def _prepare(upload, *, document_type):
     filename = Path(upload.name).name
     extension = Path(filename).suffix.lower()
-    is_conference_evidence = document_type == SourceDocument.DocumentType.CONFERENCE_EVIDENCE
-    allowed = {".pdf": "application/pdf"} if is_conference_evidence else ALLOWED
-    max_file_size = 10 * 1024 * 1024 if is_conference_evidence else MAX_FILE_SIZE
+    allowed = ALLOWED
+    max_file_size = MAX_FILE_SIZE
     if extension not in allowed:
-        raise ValidationError("學術會議佐證僅接受 PDF 檔案。" if is_conference_evidence else "Only PDF, JPG/JPEG, and PNG evidence files are accepted.")
+        raise ValidationError("佐證資料僅接受 PDF 檔案。")
     data = upload.read()
     if not data or len(data) > max_file_size:
-        raise ValidationError("學術會議佐證必須為非空白且不超過 10 MB 的 PDF 檔案。" if is_conference_evidence else "Evidence file must be non-empty and no larger than 25 MB.")
+        raise ValidationError("佐證資料必須為非空白且不超過 10 MB 的 PDF 檔案。")
     detected = _sniff(data)
     if detected != allowed[extension]: raise ValidationError("File extension and detected MIME type do not match.")
     declared = getattr(upload, "content_type", None)
@@ -42,9 +41,17 @@ def _prepare(upload, *, document_type):
 
 @transaction.atomic
 def upload_document(*, actor, publication, upload, document_type=SourceDocument.DocumentType.OTHER, request_id=None, supersedes=None):
-    editable_statuses = {publication.WorkflowStatus.DRAFT, publication.WorkflowStatus.RETURNED}
-    if publication.workflow_status not in editable_statuses or not (can_edit_publication(actor, publication) or is_staff_actor(actor)):
-        raise PermissionDenied("Evidence may only be uploaded to a draft or returned publication by its owner or staff.")
+    editable_statuses = {
+        publication.WorkflowStatus.DRAFT,
+        publication.WorkflowStatus.SUBMITTED,
+        publication.WorkflowStatus.RETURNED,
+    }
+    if (
+        publication.is_trashed
+        or publication.workflow_status not in editable_statuses
+        or not (can_edit_publication(actor, publication) or is_staff_actor(actor))
+    ):
+        raise PermissionDenied("Evidence may only be uploaded to an editable publication by its owner or staff.")
     filename, data, mime_type, checksum = _prepare(upload, document_type=document_type)
     if supersedes and (
         supersedes.publication_id != publication.id or not supersedes.is_active
@@ -71,9 +78,14 @@ def upload_document(*, actor, publication, upload, document_type=SourceDocument.
 def retire_document(*, actor, document, request_id=None):
     """Hide an editable evidence version while retaining its provenance and audit trail."""
     publication = document.publication
-    editable_statuses = {publication.WorkflowStatus.DRAFT, publication.WorkflowStatus.RETURNED}
+    editable_statuses = {
+        publication.WorkflowStatus.DRAFT,
+        publication.WorkflowStatus.SUBMITTED,
+        publication.WorkflowStatus.RETURNED,
+    }
     if (
         not document.is_active
+        or publication.is_trashed
         or publication.workflow_status not in editable_statuses
         or not (can_edit_publication(actor, publication) or is_staff_actor(actor))
     ):

@@ -148,32 +148,22 @@ class SecretaryFormalFieldTests(ContractFixture):
                     upload=SimpleUploadedFile("conference.png", b"\x89PNG\r\n\x1a\nimage", content_type="image/png"),
                 )
 
-    def test_journal_submission_checks_accepted_and_published_evidence_requirements(self):
+    def test_journal_submission_requires_general_evidence_not_legacy_document_types(self):
         from publications.services import submit_publication
         accepted = self.publication()
         accepted.publication_stage = accepted.PublicationStage.ACCEPTED
         accepted.save(update_fields=["publication_stage"])
         save_journal_article_detail(actor=self.student_user, publication_id=accepted.id, **self.journal_values())
         self.complete(accepted)
-        with self.assertRaises(ValidationError) as error:
-            submit_publication(actor=self.student_user, publication_id=accepted.id)
-        self.assertIn("接受日期", error.exception.messages[0])
-        accepted.accepted_date = date(2026, 1, 1)
-        accepted.save(update_fields=["accepted_date"])
         with TemporaryDirectory() as directory, override_settings(MEDIA_ROOT=Path(directory)):
             upload_document(
                 actor=self.student_user, publication=accepted,
-                document_type=SourceDocument.DocumentType.ACCEPTANCE_LETTER,
+                document_type=SourceDocument.DocumentType.OTHER,
                 upload=SimpleUploadedFile("accepted.pdf", b"%PDF-1.4 accepted", content_type="application/pdf"),
             )
         submit_publication(actor=self.student_user, publication_id=accepted.id)
-
-        published = self.publication()
-        save_journal_article_detail(actor=self.student_user, publication_id=published.id, **self.journal_values())
-        self.complete(published)
-        with self.assertRaises(ValidationError) as error:
-            submit_publication(actor=self.student_user, publication_id=published.id)
-        self.assertIn("卷號", error.exception.messages[0])
+        accepted.refresh_from_db()
+        self.assertEqual(accepted.workflow_status, PublicationRecord.WorkflowStatus.SUBMITTED)
 
     def test_accepted_journal_revision_can_reuse_original_active_acceptance_evidence(self):
         """A metadata-only revision must not require a duplicate acceptance letter."""
@@ -238,13 +228,12 @@ class SecretaryFormalFieldTests(ContractFixture):
         self.assertContains(selection, "請先選擇成果類型")
         response = self.client.get(reverse("publications:create"), {"publication_type": self.type.id})
         self.assertContains(response, "期刊論文正式欄位")
-        self.assertContains(response, "學生作者序")
+        self.assertNotContains(response, "學生作者序")
         data = {
             "type_flow": "1", "publication_type": str(self.type.id), "title": "RC4 journal create",
             "language": "zh-Hant", "publication_stage": PublicationRecord.PublicationStage.PUBLISHED,
             "journal_or_conference_name": "Journal of RC4", "journal_type": "sci",
             "international_journal_rank": "top_10", "impact_factor": "1.2500",
-            "student_author_order": "first", "student_author_attribute": "first_author",
             "publication_medium": "electronic", "paper_nature": "academic", "paper_attribute": "applied",
         }
         response = self.client.post(reverse("publications:create"), data)

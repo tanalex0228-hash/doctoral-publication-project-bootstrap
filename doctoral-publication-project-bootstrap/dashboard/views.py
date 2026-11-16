@@ -18,7 +18,7 @@ def student_dashboard(request):
     except DoctoralStudentProfile.DoesNotExist as error:
         raise Http404("Student profile not found.") from error
     publications = PublicationRecord.objects.filter(
-        owner_student=student, is_revision=False,
+        owner_student=student, is_revision=False, is_trashed=False, is_purged=False,
     ).select_related("publication_type").order_by("-updated_at")
     statuses = PublicationRecord.WorkflowStatus
     return render(request, "dashboard/student_dashboard.html", {
@@ -31,15 +31,9 @@ def student_dashboard(request):
 
 
 def _advisor_professor(request):
-    if not is_advisor_actor(request.user):
-        raise Http404("Advisor resource not found.")
-    try:
-        professor = request.user.professor_profile
-    except Professor.DoesNotExist as error:
-        raise Http404("Advisor profile not found.") from error
-    if professor.status != Professor.Status.ACTIVE:
-        raise Http404("Advisor resource not found.")
-    return professor
+    # Advisor workflows are retained in the historical schema but intentionally
+    # disabled in the simplified student/secretary/admin product surface.
+    raise Http404("Advisor resources are not enabled.")
 
 
 def _active_advisee(professor, student_id):

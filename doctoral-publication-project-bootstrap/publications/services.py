@@ -87,6 +87,11 @@ def create_revision(*, actor, publication_id, request_id=None):
             linked_user=author.linked_user,
             linked_professor=author.linked_professor,
             orcid=author.orcid,
+            is_system_student=author.is_system_student,
+            student_author_order=author.student_author_order,
+            student_author_order_reason=author.student_author_order_reason,
+            student_author_attribute=author.student_author_attribute,
+            is_student_corresponding_author=author.is_student_corresponding_author,
         )
     if hasattr(official, "journal_detail"):
         detail = official.journal_detail
@@ -225,7 +230,9 @@ def _editable_author_publication(*, actor, publication_id):
 def add_author(*, actor, publication_id, request_id=None, **fields):
     publication = _editable_author_publication(actor=actor, publication_id=publication_id)
     next_order = (publication.authors.aggregate(value=Max("author_order"))["value"] or 0) + 1
-    author = publication.authors.create(author_order=next_order, **fields)
+    author = PublicationAuthor(publication=publication, author_order=next_order, **fields)
+    author.full_clean()
+    author.save()
     record_event(actor=actor, action="publication_author.created", target=author, request_id=_request_id(request_id))
     return author
 
@@ -234,7 +241,11 @@ def add_author(*, actor, publication_id, request_id=None, **fields):
 def update_author(*, actor, author_id, request_id=None, **fields):
     author = PublicationAuthor.objects.select_related("publication").select_for_update().get(pk=author_id)
     _editable_author_publication(actor=actor, publication_id=author.publication_id)
-    for field in ("display_name", "affiliation", "is_corresponding_author", "linked_user", "linked_professor", "orcid"):
+    for field in (
+        "display_name", "affiliation", "is_corresponding_author", "linked_user", "linked_professor", "orcid",
+        "is_system_student", "student_author_order", "student_author_order_reason",
+        "student_author_attribute", "is_student_corresponding_author",
+    ):
         if field in fields:
             setattr(author, field, fields[field])
     author.full_clean()
@@ -293,25 +304,9 @@ def validate_submission_completeness(publication):
         has_evidence = active_documents.exists()
     if not has_evidence:
         errors.append("請至少上傳一份有效佐證文件。")
-    # RC4 detail validation is additive: reconciled/new journal records gain
-    # formal stage-specific checks, while historical records without a detail
-    # row remain valid under the frozen pre-existing completeness contract.
-    try:
-        journal_detail = publication.journal_detail
-    except JournalArticleDetail.DoesNotExist:
-        journal_detail = None
-    if journal_detail:
-        active_document_types = set(active_documents.values_list("document_type", flat=True))
-        if publication.publication_stage == PublicationRecord.PublicationStage.ACCEPTED:
-            if not publication.accepted_date:
-                errors.append("已接受的期刊論文必須填寫接受日期。")
-            if "acceptance_letter" not in active_document_types:
-                errors.append("已接受的期刊論文必須上傳接受證明。")
-        elif publication.publication_stage == PublicationRecord.PublicationStage.PUBLISHED:
-            if not all([publication.volume, publication.issue, publication.pages_or_article_number, publication.publication_date]):
-                errors.append("已刊登的期刊論文必須填寫卷號、期別、頁數與刊登日期。")
-            if "journal_proof" not in active_document_types:
-                errors.append("已刊登的期刊論文必須上傳期刊佐證。")
+    # The currently agreed business flow requires one valid PDF evidence file,
+    # not a specific legacy document type or a second date/volume checklist.
+    # Subtype form validation already enforces its conditional journal fields.
     return errors
 
 
@@ -324,8 +319,11 @@ def submit_publication(*, actor, publication_id, request_id=None):
     if completeness_errors:
         raise ValidationError(completeness_errors)
     old = publication.workflow_status
-    publication.workflow_status, publication.submitted_at, publication.updated_by = PublicationRecord.WorkflowStatus.SUBMITTED, timezone.now(), actor
-    publication.save(update_fields=["workflow_status", "submitted_at", "updated_by", "updated_at"])
+    publication.workflow_status = PublicationRecord.WorkflowStatus.SUBMITTED
+    publication.submitted_at = timezone.now()
+    publication.updated_by = actor
+    publication.submission_count += 1
+    publication.save(update_fields=["workflow_status", "submitted_at", "submission_count", "updated_by", "updated_at"])
     rid = _request_id(request_id)
     record_transition(publication=publication, actor=actor, from_status=old, to_status=publication.workflow_status, request_id=rid)
     record_event(actor=actor, action="publication.submitted", target=publication, request_id=rid)
@@ -341,6 +339,137 @@ def withdraw_publication(*, actor, publication_id, request_id=None):
     rid = _request_id(request_id)
     record_transition(publication=publication, actor=actor, from_status=old, to_status=publication.workflow_status, request_id=rid)
     record_event(actor=actor, action="publication.withdrawn", target=publication, request_id=rid)
+    return publication
+
+
+@transaction.atomic
+def trash_publication(*, actor, publication_id, request_id=None):
+    """Soft-delete a record without losing evidence or audit history.
+
+    A student may remove only their still-working record. A project secretary
+    may remove any record from daily worklists. The admin trash is the recovery
+    boundary; no related documents or history are deleted here.
+    """
+    publication = PublicationRecord.objects.select_for_update().get(pk=publication_id)
+    if publication.is_purged:
+        raise PermissionDenied("A permanently cleared publication cannot be moved or restored.")
+    owner_removal = (
+        publication.owner_student.user_id == actor.id
+        and publication.workflow_status in {
+            PublicationRecord.WorkflowStatus.DRAFT,
+            PublicationRecord.WorkflowStatus.SUBMITTED,
+            PublicationRecord.WorkflowStatus.RETURNED,
+        }
+    )
+    if not (is_staff_actor(actor) or owner_removal):
+        raise PermissionDenied("Publication cannot be moved to trash by this actor.")
+    if publication.is_trashed:
+        return publication
+    publication.is_trashed = True
+    publication.trashed_at = timezone.now()
+    publication.trashed_by = actor
+    publication.updated_by = actor
+    publication.save(update_fields=["is_trashed", "trashed_at", "trashed_by", "updated_by", "updated_at"])
+    record_event(
+        actor=actor, action="publication.trashed", target=publication,
+        request_id=_request_id(request_id), metadata={"workflow_status": publication.workflow_status},
+    )
+    return publication
+
+
+@transaction.atomic
+def restore_trashed_publication(*, actor, publication_id, request_id=None):
+    """Restore a soft-deleted record through an explicit auditable boundary."""
+    publication = PublicationRecord.objects.select_for_update().get(pk=publication_id)
+    if not is_staff_actor(actor):
+        raise PermissionDenied("Only a project secretary may restore a trashed publication.")
+    if publication.is_purged:
+        raise PermissionDenied("A permanently cleared publication cannot be restored.")
+    if not publication.is_trashed:
+        return publication
+    publication.is_trashed = False
+    publication.trashed_at = None
+    publication.trashed_by = None
+    publication.updated_by = actor
+    publication.save(update_fields=["is_trashed", "trashed_at", "trashed_by", "updated_by", "updated_at"])
+    record_event(actor=actor, action="publication.trash_restored", target=publication, request_id=_request_id(request_id))
+    return publication
+
+
+@transaction.atomic
+def purge_trashed_publication(*, actor, publication_id, request_id=None):
+    """Irreversibly clear business content while retaining immutable evidence.
+
+    The database row, source-document provenance, decisions, transitions, and
+    audit records remain for institutional traceability.  Cleared content is
+    hidden from every application surface and documents are made inaccessible.
+    """
+    if not actor.is_superuser:
+        raise PermissionDenied("Only the Django root administrator may permanently clear a publication.")
+    publication = PublicationRecord.objects.select_for_update().get(pk=publication_id)
+    if not publication.is_trashed:
+        raise ValidationError("Only a publication already in the garbage area may be permanently cleared.")
+    if publication.is_purged:
+        return publication
+
+    # Disable private evidence without deleting provenance or storage identity.
+    publication.documents.filter(is_active=True).update(is_active=False)
+    for author in publication.authors.select_for_update():
+        author.display_name = "已清除作者"
+        author.affiliation = ""
+        author.is_corresponding_author = False
+        author.linked_user = None
+        author.linked_professor = None
+        author.orcid = None
+        author.is_system_student = False
+        author.student_author_order = ""
+        author.student_author_order_reason = ""
+        author.student_author_attribute = ""
+        author.is_student_corresponding_author = None
+        author.save()
+    publication.indices.clear()
+    publication.research_fields.clear()
+    publication.sdg_assignments.all().delete()
+    try:
+        journal = publication.journal_detail
+    except JournalArticleDetail.DoesNotExist:
+        journal = None
+    if journal:
+        journal.publication_place = ""
+        journal.remarks = ""
+        journal.save(update_fields=["publication_place", "remarks"])
+    try:
+        conference = publication.conference_detail
+    except ConferenceDetail.DoesNotExist:
+        conference = None
+    if conference:
+        conference.organizer = "已清除"
+        conference.location_city = "已清除"
+        conference.remarks = ""
+        conference.save(update_fields=["organizer", "location_city", "remarks"])
+    publication.title = "已清除的成果"
+    publication.abstract = ""
+    publication.journal_or_conference_name = ""
+    publication.doi = None
+    publication.issn = None
+    publication.volume = ""
+    publication.issue = ""
+    publication.pages_or_article_number = ""
+    publication.submitted_to_journal_date = None
+    publication.accepted_date = None
+    publication.publication_date = None
+    publication.is_published = False
+    publication.visibility_scope = PublicationRecord.VisibilityScope.STAFF_ONLY
+    publication.is_purged = True
+    publication.purged_at = timezone.now()
+    publication.purged_by = actor
+    publication.updated_by = actor
+    publication.save()
+    record_event(
+        actor=actor, action="publication.purged", target=publication,
+        request_id=_request_id(request_id),
+        metadata={"documents_disabled": True, "authors_anonymized": True},
+    )
     return publication
 
 

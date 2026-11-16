@@ -12,6 +12,11 @@ from .forms import PortalFilterForm
 from .services import PORTAL_SORTS, portal_publications
 
 
+def _public_portal_removed():
+    """The simplified product has no anonymous or department portal surface."""
+    raise Http404("Public publication resources are not enabled.")
+
+
 def _portal_records(request, queryset):
     # Bind an empty QueryDict as well, so an unfiltered portal list is valid.
     form = PortalFilterForm(request.GET)
@@ -23,6 +28,7 @@ def _portal_records(request, queryset):
 
 
 def publication_list(request):
+    _public_portal_removed()
     form, publications, sort = _portal_records(request, public_portal_publications())
     page_obj, pagination_query = paginate_queryset(request, publications)
     return render(request, "public_site/publication_list.html", {
@@ -39,6 +45,7 @@ def publication_list(request):
 
 
 def publication_detail(request, publication_id):
+    _public_portal_removed()
     publication = get_object_or_404(
         public_portal_publications().select_related("publication_type").prefetch_related(
             "authors", "indices", "research_fields"
@@ -52,8 +59,8 @@ def publication_detail(request, publication_id):
     })
 
 
-@login_required
 def department_publication_list(request):
+    _public_portal_removed()
     if not is_department_member(request.user):
         raise Http404("Department resource not found.")
     form, publications, sort = _portal_records(request, department_portal_publications_for(request.user))
@@ -71,8 +78,8 @@ def department_publication_list(request):
     })
 
 
-@login_required
 def department_publication_detail(request, publication_id):
+    _public_portal_removed()
     if not is_department_member(request.user):
         raise Http404("Department resource not found.")
     publication = get_object_or_404(

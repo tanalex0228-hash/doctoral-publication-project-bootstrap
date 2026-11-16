@@ -82,6 +82,7 @@ class PublicationRecord(models.Model):
     is_published = models.BooleanField(default=False, db_index=True)
     visibility_scope = models.CharField(max_length=24, choices=VisibilityScope.choices, default=VisibilityScope.OWNER_ADVISOR, db_index=True)
     submitted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    submission_count = models.PositiveSmallIntegerField(default=0, db_index=True)
     approved_at = models.DateTimeField(null=True, blank=True, db_index=True)
     approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="approved_publications")
     approval_revoked_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -90,6 +91,18 @@ class PublicationRecord(models.Model):
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="updated_publications")
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_trashed = models.BooleanField(default=False, db_index=True)
+    trashed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    trashed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="trashed_publications",
+    )
+    is_purged = models.BooleanField(default=False, db_index=True)
+    purged_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    purged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="purged_publications",
+    )
     indices = models.ManyToManyField("taxonomy.PublicationIndex", through="PublicationIndexAssignment", blank=True)
     research_fields = models.ManyToManyField("taxonomy.ResearchField", through="PublicationFieldAssignment", blank=True)
 
@@ -124,6 +137,19 @@ class PublicationRecord(models.Model):
 
 
 class PublicationAuthor(models.Model):
+    class StudentAuthorOrder(models.TextChoices):
+        FIRST = "first", "第一作者"
+        SECOND = "second", "第二作者"
+        THIRD = "third", "第三作者"
+        FOURTH_OR_LATER = "fourth_or_later", "第四作者（含）以後"
+        NO_EVIDENCE = "no_evidence", "無佐證資料"
+
+    class StudentAuthorAttribute(models.TextChoices):
+        FIRST_AUTHOR = "first_author", "第一作者"
+        CORRESPONDING_AUTHOR = "corresponding_author", "通訊作者"
+        CO_FIRST_OR_CO_CORRESPONDING = "co_first_or_co_corresponding", "第一作者共同貢獻或共同通訊作者"
+        NEITHER = "neither", "非第一或通訊作者"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     publication = models.ForeignKey(PublicationRecord, on_delete=models.PROTECT, related_name="authors")
     display_name = models.CharField(max_length=200, db_index=True)
@@ -133,6 +159,11 @@ class PublicationAuthor(models.Model):
     linked_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="authored_publications")
     linked_professor = models.ForeignKey("professors.Professor", on_delete=models.SET_NULL, null=True, blank=True, related_name="authored_publications")
     orcid = models.CharField(max_length=32, null=True, blank=True, db_index=True)
+    is_system_student = models.BooleanField(default=False, db_index=True)
+    student_author_order = models.CharField(max_length=20, choices=StudentAuthorOrder.choices, blank=True)
+    student_author_order_reason = models.CharField(max_length=500, blank=True)
+    student_author_attribute = models.CharField(max_length=32, choices=StudentAuthorAttribute.choices, blank=True)
+    is_student_corresponding_author = models.BooleanField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
@@ -140,6 +171,26 @@ class PublicationAuthor(models.Model):
         ordering = ["author_order"]
         verbose_name = "成果作者"
         verbose_name_plural = "成果作者"
+
+    def clean(self):
+        errors = {}
+        if self.is_system_student and not self.linked_user_id:
+            errors["linked_user"] = "本校系統學生作者必須連結既有學生帳號。"
+        if not self.is_system_student and any((
+            self.student_author_order,
+            self.student_author_order_reason,
+            self.student_author_attribute,
+            self.is_student_corresponding_author is not None,
+        )):
+            errors["is_system_student"] = "僅本校系統學生作者可填寫學生作者資料。"
+        if (
+            self.is_system_student
+            and self.student_author_order == self.StudentAuthorOrder.FOURTH_OR_LATER
+            and not self.student_author_order_reason.strip()
+        ):
+            errors["student_author_order_reason"] = "第四作者（含）以後必須填寫原因。"
+        if errors:
+            raise ValidationError(errors)
 
 
 class PublicationIndexAssignment(models.Model):
@@ -239,6 +290,7 @@ class JournalArticleDetail(models.Model):
         EI = "ei", "EI"
         AHCI = "ahci", "A&HCI"
         THCI = "thci", "THCI"
+        TCI = "tci", "TCI"
         SCOPUS = "scopus", "Scopus"
         COLLEGE_RECOGNIZED = "college_recognized", "各院認可之優良期刊"
         OTHER = "other", "其他"
@@ -289,9 +341,9 @@ class JournalArticleDetail(models.Model):
     impact_factor = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
     taiwan_journal_level = models.CharField(max_length=16, choices=TaiwanJournalLevel.choices, blank=True)
     custom_journal_type = models.CharField(max_length=255, blank=True)
-    student_author_order = models.CharField(max_length=20, choices=StudentAuthorOrder.choices)
+    student_author_order = models.CharField(max_length=20, choices=StudentAuthorOrder.choices, blank=True)
     student_author_order_reason = models.CharField(max_length=500, blank=True)
-    student_author_attribute = models.CharField(max_length=32, choices=StudentAuthorAttribute.choices)
+    student_author_attribute = models.CharField(max_length=32, choices=StudentAuthorAttribute.choices, blank=True)
     is_student_corresponding_author = models.BooleanField(default=False)
     has_international_collaboration = models.BooleanField(default=False)
     publication_medium = models.CharField(max_length=24, choices=PublicationMedium.choices)

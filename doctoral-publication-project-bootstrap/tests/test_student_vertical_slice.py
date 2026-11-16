@@ -47,15 +47,16 @@ class StudentVerticalSliceTests(ContractFixture):
         self.assertEqual(publication.title, "Updated title")
         self.assertEqual(publication.workflow_status, PublicationRecord.WorkflowStatus.DRAFT)
 
-    def test_submitted_cannot_be_edited_by_student(self):
+    def test_submitted_can_be_edited_by_student_until_secretary_decides(self):
         publication = self.publication()
         self.complete(publication)
         submit_publication(actor=self.student_user, publication_id=publication.id)
         self.client.force_login(self.student_user)
-        response = self.client.post(reverse("publications:edit", args=[publication.id]), self.payload("Forbidden edit"))
-        self.assertEqual(response.status_code, 404)
+        response = self.client.post(reverse("publications:edit", args=[publication.id]), self.payload("Pending edit"))
+        self.assertEqual(response.status_code, 302)
         publication.refresh_from_db()
-        self.assertNotEqual(publication.title, "Forbidden edit")
+        self.assertEqual(publication.title, "Pending edit")
+        self.assertEqual(publication.workflow_status, PublicationRecord.WorkflowStatus.SUBMITTED)
 
     def test_submit_runs_completeness_validation_before_workflow_transition(self):
         publication = self.publication()
@@ -91,9 +92,9 @@ class StudentVerticalSliceTests(ContractFixture):
         self.client.post(reverse("publications:author_move", args=[publication.id, second.id, "up"]))
         second.refresh_from_db(); first.refresh_from_db()
         self.assertEqual((second.author_order, first.author_order), (1, 2))
-        self.client.post(reverse("publications:author_edit", args=[publication.id, second.id]), {"display_name": "Updated author", "affiliation": "External", "is_corresponding_author": "on"})
+        self.client.post(reverse("publications:author_edit", args=[publication.id, second.id]), {"display_name": "Updated author"})
         second.refresh_from_db()
-        self.assertTrue(second.is_corresponding_author)
+        self.assertEqual(second.display_name, "Updated author")
         self.client.post(reverse("publications:author_delete", args=[publication.id, first.id]))
         self.assertFalse(PublicationAuthor.objects.filter(pk=first.id).exists())
 

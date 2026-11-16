@@ -99,6 +99,11 @@ def _merge_approved_revision(*, revision, official, actor, request_id):
             is_corresponding_author=author.is_corresponding_author,
             linked_user=author.linked_user, linked_professor=author.linked_professor,
             orcid=author.orcid,
+            is_system_student=author.is_system_student,
+            student_author_order=author.student_author_order,
+            student_author_order_reason=author.student_author_order_reason,
+            student_author_attribute=author.student_author_attribute,
+            is_student_corresponding_author=author.is_student_corresponding_author,
         ) for author in revision.authors.all()
     ])
     _replace_journal_detail(revision, official)

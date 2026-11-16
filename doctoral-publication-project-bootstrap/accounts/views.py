@@ -7,7 +7,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
-from publications.permissions import is_advisor_actor, is_staff_actor
+from publications.permissions import is_staff_actor
 from doctoral_students.models import DoctoralStudentProfile
 from publications.models import PublicationRecord
 from publications.querysets import official_publications
@@ -16,11 +16,9 @@ from publications.querysets import official_publications
 def _post_login_destination(user):
     if is_staff_actor(user):
         return "review:queue"
-    if is_advisor_actor(user):
-        return "dashboard:advisor"
     if user.has_project_role("student") and DoctoralStudentProfile.objects.filter(user=user).exists():
         return "dashboard:student"
-    return "public_site:publication_list"
+    return "accounts:profile"
 
 
 @never_cache
@@ -64,7 +62,7 @@ def profile_view(request):
     approved = PublicationRecord.objects.none()
     if student:
         publications = PublicationRecord.objects.filter(
-            owner_student=student, is_revision=False,
+            owner_student=student, is_revision=False, is_trashed=False, is_purged=False,
         ).select_related("publication_type").order_by("-updated_at")
         approved = official_publications().filter(owner_student=student).select_related("publication_type")
     return render(request, "accounts/profile.html", {

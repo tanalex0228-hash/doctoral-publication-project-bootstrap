@@ -6,7 +6,7 @@ from .models import (
     PublicationAuthor, PublicationFieldAssignment, PublicationIndexAssignment,
     PublicationRecord, PublicationSDGAssignment, SustainableDevelopmentGoal,
 )
-from .services import set_published, set_visibility
+from .services import purge_trashed_publication, restore_trashed_publication, set_published, set_visibility
 from review.services import approve_publication, archive_publication, restore_publication, return_for_revision
 
 class PublicationAuthorInline(admin.TabularInline):
@@ -42,12 +42,18 @@ class ConferenceDetailInline(admin.StackedInline):
 
 @admin.register(PublicationRecord)
 class PublicationRecordAdmin(admin.ModelAdmin):
-    list_display = ("title", "owner_student", "publication_type", "workflow_status", "is_published", "visibility_scope", "publication_date")
-    list_filter = ("workflow_status", "is_published", "visibility_scope", "publication_type")
+    list_display = ("title", "owner_student", "publication_type", "workflow_status", "is_trashed", "is_purged", "is_published", "visibility_scope", "publication_date")
+    list_filter = ("workflow_status", "is_trashed", "is_purged", "is_published", "visibility_scope", "publication_type")
     search_fields = ("title", "doi", "journal_or_conference_name", "owner_student__student_number")
     inlines = (PublicationAuthorInline, JournalArticleDetailInline, ConferenceDetailInline)
     readonly_fields = tuple(field.name for field in PublicationRecord._meta.fields) + ("indices", "research_fields")
-    actions = ("approve_selected", "return_selected", "archive_selected", "publish_public_selected")
+    actions = ("approve_selected", "return_selected", "restore_from_trash_selected", "permanently_clear_selected")
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not request.user.is_superuser:
+            actions.pop("permanently_clear_selected", None)
+        return actions
 
     def has_delete_permission(self, request, obj=None):
         """Records are governed through the review/archive workflow, never hard-deleted."""
@@ -108,6 +114,20 @@ class PublicationRecordAdmin(admin.ModelAdmin):
             self.message_user(request, f"已公開並發佈 {completed} 筆成果。", level="SUCCESS")
         if failures:
             self.message_user(request, "；".join(failures), level="ERROR")
+
+    @admin.action(description="從垃圾桶復原選取成果")
+    def restore_from_trash_selected(self, request, queryset):
+        self._run_workflow_action(
+            request, queryset.filter(is_trashed=True), restore_trashed_publication,
+            success="已從垃圾桶復原 {count} 筆成果。",
+        )
+
+    @admin.action(description="永久清除選取的垃圾桶成果（僅 root；保留稽核）")
+    def permanently_clear_selected(self, request, queryset):
+        self._run_workflow_action(
+            request, queryset.filter(is_trashed=True, is_purged=False), purge_trashed_publication,
+            success="已永久清除 {count} 筆成果內容；稽核證據仍保留。",
+        )
 
 class GovernedPublicationRelatedAdmin(admin.ModelAdmin):
     """Read-only troubleshooting view for data owned by PublicationRecord."""

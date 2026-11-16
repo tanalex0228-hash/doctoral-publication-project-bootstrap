@@ -20,7 +20,7 @@ from .services import (
     add_author, create_revision, create_student_publication, delete_author,
     move_author, save_conference_detail, save_journal_article_detail,
     set_publication_sdgs, submit_publication, update_author, update_publication,
-    withdraw_publication,
+    trash_publication, withdraw_publication,
 )
 from .type_codes import CONFERENCE_TYPE_SLUGS, JOURNAL_TYPE_SLUGS, publication_detail_kind
 
@@ -41,7 +41,7 @@ def _owned_publication(request, publication_id):
             "authors", "indices", "research_fields", "documents", "sdg_assignments__goal",
             "conference_detail__participant_country_assignments__country",
             "conference_detail__presentation_mode_assignments__mode", "review_decisions",
-        ).filter(owner_student=_student_for(request)),
+        ).filter(owner_student=_student_for(request), is_trashed=False),
         pk=publication_id,
     )
 
@@ -64,8 +64,7 @@ def _type_for_kind(kind):
 def _apply_business_labels(form, kind):
     """Keep shared storage fields in the vocabulary of the selected workflow."""
     if kind == "conference":
-        form.fields["title"].label = "成果名稱"
-        form.fields["journal_or_conference_name"].label = "學術會議名"
+        form.fields["title"].label = "學術會議名"
     else:
         form.fields["journal_or_conference_name"].label = "期刊名"
 
@@ -78,7 +77,7 @@ def _combined_form_context(*, form, detail_form, kind, publication=None, selecte
         "detail_form": detail_form,
         "detail_kind": kind,
         "hidden_root_fields": (
-            {"doi", "issn", "volume", "issue", "pages_or_article_number", "publication_stage",
+            {"journal_or_conference_name", "doi", "issn", "volume", "issue", "pages_or_article_number", "publication_stage",
              "submitted_to_journal_date", "accepted_date", "publication_date"}
             if kind == "conference" else set()
         ),
@@ -110,10 +109,14 @@ def publication_typed_create(request, kind):
     selected_type = _type_for_kind(kind)
     detail_class = JournalArticleDetailForm if kind == "journal" else ConferenceDetailForm
     if request.method == "POST":
-        form = PublicationForm(request.POST)
+        post_data = request.POST.copy()
+        post_data["publication_type"] = str(selected_type.pk)
+        form = PublicationForm(post_data, require_publication_stage=kind == "journal")
         detail_form = detail_class(request.POST)
         if form.is_valid() and detail_form.is_valid():
             values, indices, research_fields = publication_form_values(form)
+            if kind == "conference":
+                values["journal_or_conference_name"] = values["title"]
             with transaction.atomic():
                 publication = create_student_publication(
                     actor=request.user, owner_student=_student_for(request), indices=indices,
@@ -123,7 +126,7 @@ def publication_typed_create(request, kind):
             messages.success(request, "成果與專屬明細已建立。下一步請新增作者與上傳佐證文件。")
             return redirect("publications:detail", publication_id=publication.id)
     else:
-        form = PublicationForm(initial={"publication_type": selected_type})
+        form = PublicationForm(initial={"publication_type": selected_type}, require_publication_stage=kind == "journal")
         detail_form = detail_class()
     return render(request, "publications/publication_form.html", _combined_form_context(
         form=form, detail_form=detail_form, kind=kind, selected_type=selected_type,
@@ -200,7 +203,9 @@ def publication_detail(request, publication_id):
 def publication_edit(request, publication_id):
     publication = _editable_publication(request, publication_id)
     if request.method == "POST":
-        form = PublicationForm(request.POST, instance=publication)
+        post_data = request.POST.copy()
+        post_data["publication_type"] = str(publication.publication_type_id)
+        form = PublicationForm(post_data, instance=publication)
         if form.is_valid():
             values, indices, research_fields = publication_form_values(form)
             update_publication(actor=request.user, publication_id=publication.id, indices=indices, research_fields=research_fields, **values)
@@ -223,10 +228,14 @@ def publication_typed_edit(request, publication_id, kind):
     except (JournalArticleDetail.DoesNotExist, ConferenceDetail.DoesNotExist):
         detail = None
     if request.method == "POST":
-        form = PublicationForm(request.POST, instance=publication)
+        post_data = request.POST.copy()
+        post_data["publication_type"] = str(publication.publication_type_id)
+        form = PublicationForm(post_data, instance=publication, require_publication_stage=kind == "journal")
         detail_form = detail_class(request.POST, instance=detail)
         if form.is_valid() and detail_form.is_valid():
             values, indices, research_fields = publication_form_values(form)
+            if kind == "conference":
+                values["journal_or_conference_name"] = values["title"]
             with transaction.atomic():
                 publication = update_publication(
                     actor=request.user, publication_id=publication.id, indices=indices,
@@ -236,7 +245,7 @@ def publication_typed_edit(request, publication_id, kind):
             messages.success(request, "成果與專屬明細已更新。")
             return redirect("publications:detail", publication_id=publication.id)
     else:
-        form = PublicationForm(instance=publication)
+        form = PublicationForm(instance=publication, require_publication_stage=kind == "journal")
         detail_form = detail_class(instance=detail)
     return render(request, "publications/publication_form.html", _combined_form_context(
         form=form, detail_form=detail_form, kind=kind, publication=publication,
@@ -391,4 +400,21 @@ def publication_withdraw(request, publication_id):
         messages.error(request, "; ".join(getattr(error, "messages", [str(error)])))
         return redirect("publications:detail", publication_id=publication.id)
     messages.success(request, "草稿已撤回；為維護稽核歷史，系統不會永久刪除此成果。")
+    return redirect("dashboard:student")
+
+
+@login_required
+@require_POST
+def publication_trash(request, publication_id):
+    """Student-facing delete action: a recovery-safe move to the admin trash."""
+    publication = get_object_or_404(
+        PublicationRecord.objects.filter(owner_student=_student_for(request), is_trashed=False),
+        pk=publication_id,
+    )
+    try:
+        trash_publication(actor=request.user, publication_id=publication.id)
+    except (PermissionDenied, ValidationError) as error:
+        messages.error(request, "; ".join(getattr(error, "messages", [str(error)])))
+        return redirect("publications:detail", publication_id=publication.id)
+    messages.success(request, "成果已移至垃圾桶；資料、佐證文件與稽核紀錄均已保留。")
     return redirect("dashboard:student")
