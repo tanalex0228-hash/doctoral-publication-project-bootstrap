@@ -10,7 +10,7 @@
   </div>
 </div>
 <form method="get" class="card card-body shadow-sm mb-3"><div class="row g-2">
-  <div class="col-md-4"><input class="form-control" name="q" value="{{ query }}" placeholder="搜尋成果標題"></div>
+  <div class="col-md-4"><input class="form-control" name="q" value="{{ query }}" placeholder="搜尋成果標題或學號"></div>
   <div class="col-md-2"><select class="form-select" name="status"><option value="submitted" {% if status == 'submitted' %}selected{% endif %}>待審核</option><option value="returned" {% if status == 'returned' %}selected{% endif %}>已駁回</option><option value="approved" {% if status == 'approved' %}selected{% endif %}>已核可</option><option value="trash" {% if status == 'trash' %}selected{% endif %}>垃圾桶</option></select></div>
   <div class="col-md-2"><select class="form-select" name="type"><option value="">所有成果類型</option>{% for type in publication_types %}<option value="{{ type.id }}" {% if selected_type == type.id|stringformat:'s' %}selected{% endif %}>{{ type.display_name }}</option>{% endfor %}</select></div>
   <div class="col-md-2"><select class="form-select" name="sort"><option value="submitted_at" {% if sort == 'submitted_at' %}selected{% endif %}>最近送審</option><option value="student" {% if sort == 'student' %}selected{% endif %}>學生學號</option><option value="title" {% if sort == 'title' %}selected{% endif %}>成果標題</option><option value="type" {% if sort == 'type' %}selected{% endif %}>成果類型</option></select></div>

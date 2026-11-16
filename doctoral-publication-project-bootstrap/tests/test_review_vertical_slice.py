@@ -42,6 +42,8 @@ class ReviewVerticalSliceTests(ContractFixture):
         self.client.force_login(self.staff)
         response = self.client.get(reverse("review:queue"), {"q": publication.owner_student.display_name})
         self.assertNotContains(response, publication.title)
+        response = self.client.get(reverse("review:queue"), {"q": publication.owner_student.student_number})
+        self.assertContains(response, publication.title)
         response = self.client.get(reverse("review:queue"), {"q": "Unique review title"})
         self.assertContains(response, publication.title)
 
