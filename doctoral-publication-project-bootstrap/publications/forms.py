@@ -28,14 +28,23 @@ class PublicationForm(BootstrapFormMixin, forms.ModelForm):
 
     class Meta:
         model = PublicationRecord
-        fields = ["publication_type", "title", "journal_or_conference_name", "doi", "issn", "publication_stage", "publication_date"]
+        fields = [
+            "publication_type", "title", "journal_or_conference_name", "doi", "issn",
+            "volume", "issue", "pages_or_article_number", "publication_stage",
+            "accepted_date", "publication_date",
+        ]
         labels = {
             "publication_type": "成果類型", "title": "論文篇名",
             "journal_or_conference_name": "期刊名稱／學術會議名", "doi": "DOI（數位物件識別號）",
             "issn": "國際標準期刊號 ISSN", "publication_stage": "發表進度",
-            "publication_date": "刊登日期", "indices": "索引分類", "research_fields": "研究領域",
+            "volume": "卷", "issue": "期", "pages_or_article_number": "頁碼／文章編號",
+            "accepted_date": "接受日期", "publication_date": "刊登日期",
+            "indices": "索引分類", "research_fields": "研究領域",
         }
-        widgets = {"abstract": forms.Textarea(attrs={"rows": 5}), "submitted_to_journal_date": forms.DateInput(attrs={"type": "date"}), "accepted_date": forms.DateInput(attrs={"type": "date"}), "publication_date": forms.DateInput(attrs={"type": "date"})}
+        widgets = {
+            "accepted_date": forms.DateInput(attrs={"type": "date"}),
+            "publication_date": forms.DateInput(attrs={"type": "date"}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
