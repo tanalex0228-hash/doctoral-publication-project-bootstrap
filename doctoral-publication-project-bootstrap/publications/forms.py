@@ -219,15 +219,25 @@ class ConferenceDetailForm(BootstrapFormMixin, forms.ModelForm):
 
     class Meta:
         model = ConferenceDetail
-        exclude = ["id", "publication"]
+        fields = [
+            "conference_type", "organizer", "location_country", "location_city", "start_date", "end_date",
+            "received_subsidy", "presented_paper", "paper_title", "paper_nature", "paper_is_peer_reviewed",
+            "paper_page_count", "has_international_collaboration", "international_collaboration_type",
+            "is_scopus_indexed", "remarks",
+        ]
         labels = {
             "conference_type": "會議屬性", "organizer": "主辦單位", "location_country": "會議地點國家",
             "location_city": "會議地點城市", "start_date": "起始日期", "end_date": "結束日期",
-            "received_subsidy": "是否獲補助", "presented_paper": "是否發表論文", "remarks": "備註",
+            "received_subsidy": "是否獲補助", "presented_paper": "是否發表論文",
+            "paper_title": "論文篇名", "paper_nature": "論文性質", "paper_is_peer_reviewed": "論文是否有審查機制",
+            "paper_page_count": "頁數", "has_international_collaboration": "是否國際合作",
+            "international_collaboration_type": "國際合作類型", "is_scopus_indexed": "是否 Scopus 收錄",
+            "remarks": "備註",
         }
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
+            "paper_page_count": forms.NumberInput(attrs={"min": 1}),
             "remarks": forms.Textarea(attrs={"rows": 3}),
         }
 
@@ -248,6 +258,20 @@ class ConferenceDetailForm(BootstrapFormMixin, forms.ModelForm):
         if countries.count() > 5:
             raise ValidationError("與會人員國家最多可選擇 5 個。")
         return countries
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("presented_paper"):
+            cleaned["paper_title"] = ""
+            cleaned["paper_nature"] = ""
+            cleaned["paper_is_peer_reviewed"] = False
+            cleaned["paper_page_count"] = None
+            cleaned["has_international_collaboration"] = False
+            cleaned["international_collaboration_type"] = ""
+            cleaned["is_scopus_indexed"] = False
+        elif not cleaned.get("has_international_collaboration"):
+            cleaned["international_collaboration_type"] = ""
+        return cleaned
 
     def clean_sdgs(self):
         goals = self.cleaned_data["sdgs"]

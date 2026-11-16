@@ -389,6 +389,11 @@ class ConferenceDetail(models.Model):
         INTERNATIONAL = "international", "國際研討會"
         DOMESTIC = "domestic", "國內研討會"
 
+    class PaperNature(models.TextChoices):
+        ACADEMIC = "academic", "學術"
+        EDUCATIONAL = "educational", "學習及教育"
+        PRACTICAL = "practical", "實務"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     publication = models.OneToOneField(PublicationRecord, on_delete=models.PROTECT, related_name="conference_detail")
     conference_type = models.CharField(max_length=16, choices=ConferenceType.choices)
@@ -399,6 +404,13 @@ class ConferenceDetail(models.Model):
     end_date = models.DateField()
     received_subsidy = models.BooleanField(default=False)
     presented_paper = models.BooleanField(default=False)
+    paper_title = models.CharField(max_length=500, blank=True)
+    paper_nature = models.CharField(max_length=16, choices=PaperNature.choices, blank=True)
+    paper_is_peer_reviewed = models.BooleanField(default=False)
+    paper_page_count = models.PositiveIntegerField(null=True, blank=True)
+    has_international_collaboration = models.BooleanField(default=False)
+    international_collaboration_type = models.CharField(max_length=255, blank=True)
+    is_scopus_indexed = models.BooleanField(default=False)
     remarks = models.TextField(blank=True)
 
     class Meta:
@@ -406,8 +418,20 @@ class ConferenceDetail(models.Model):
         verbose_name_plural = "學術會議明細"
 
     def clean(self):
+        errors = {}
         if self.start_date and self.end_date and self.end_date < self.start_date:
-            raise ValidationError({"end_date": "結束日期不得早於起始日期。"})
+            errors["end_date"] = "結束日期不得早於起始日期。"
+        if self.presented_paper:
+            if not self.paper_title.strip():
+                errors["paper_title"] = "勾選「是否發表論文」為是時，必須填寫論文篇名。"
+            if not self.paper_nature:
+                errors["paper_nature"] = "勾選「是否發表論文」為是時，必須選擇論文性質。"
+            if self.paper_page_count is None:
+                errors["paper_page_count"] = "勾選「是否發表論文」為是時，必須填寫頁數。"
+            if self.has_international_collaboration and not self.international_collaboration_type.strip():
+                errors["international_collaboration_type"] = "有國際合作時，必須填寫國際合作類型。"
+        if errors:
+            raise ValidationError(errors)
 
 
 class ConferenceParticipantCountry(models.Model):

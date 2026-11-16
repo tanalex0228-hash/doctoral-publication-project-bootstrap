@@ -36,7 +36,8 @@
         {% elif detail_kind == 'conference' and field.name == 'sdgs' %}
         <div class="col-12 detail-field" data-name="{{ field.name }}"><label class="form-label d-block">{{ field.label }} <span class="text-muted fw-normal">（最多 3 項）</span></label><div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-2">{% for choice in field %}<div class="col"><div class="form-check">{{ choice.tag }}<label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label></div></div>{% endfor %}</div>{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
         {% else %}
-        <div class="col-md-6 detail-field" data-name="{{ field.name }}">
+        {% if detail_kind == 'conference' and field.name == 'paper_title' %}<div class="col-12 detail-field" data-name="conference-paper-heading"><hr class="my-1"><h3 class="h6 mb-1">會議論文資料</h3><p class="small text-muted mb-0">作者、通訊作者與作者序請在成果建立後，於成果詳情的「作者」區塊逐位設定。</p></div>{% endif %}
+        <div class="col-md-6 detail-field{% if detail_kind == 'conference' and field.name == 'paper_title' or detail_kind == 'conference' and field.name == 'international_collaboration_type' %} col-12{% endif %}" data-name="{{ field.name }}">
           {% if field.field.widget.input_type == 'checkbox' %}<div class="form-check mt-4">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
           {% else %}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}
           {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
@@ -61,6 +62,23 @@
     show(['publication_date'], stage.value === 'published', 'data-root-name');
   }
   type.addEventListener('change', refresh); stage.addEventListener('change', refresh); refresh();
+})();
+</script>
+{% elif detail_kind == "conference" %}
+<script>
+(() => {
+  const presented = document.getElementById('id_presented_paper');
+  const international = document.getElementById('id_has_international_collaboration');
+  if (!presented || !international) return;
+  const paperFields = ['conference-paper-heading', 'paper_title', 'paper_nature', 'paper_is_peer_reviewed', 'paper_page_count', 'has_international_collaboration', 'international_collaboration_type', 'is_scopus_indexed'];
+  const show = (name, visible) => { const node = document.querySelector(`[data-name="${name}"]`); if (node) node.hidden = !visible; };
+  function refresh() {
+    paperFields.forEach(name => show(name, presented.checked));
+    show('international_collaboration_type', presented.checked && international.checked);
+  }
+  presented.addEventListener('change', refresh);
+  international.addEventListener('change', refresh);
+  refresh();
 })();
 </script>
 {% endif %}

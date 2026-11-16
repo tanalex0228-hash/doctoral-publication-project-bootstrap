@@ -10,7 +10,7 @@ from django.urls import reverse
 from documents.models import SourceDocument
 from documents.services import upload_document
 from publications.models import (
-    ConferencePresentationMode, Country, JournalArticleDetail,
+    ConferenceDetail, ConferencePresentationMode, Country, JournalArticleDetail,
     SustainableDevelopmentGoal, PublicationRecord,
 )
 from publications.services import (
@@ -105,6 +105,32 @@ class SecretaryFormalFieldTests(ContractFixture):
         )
         self.assertEqual(detail.participant_country_assignments.count(), 3)
         self.assertEqual(detail.presentation_mode_assignments.count(), 2)
+
+    def test_presented_conference_paper_requires_and_saves_its_conditional_fields(self):
+        publication = self.publication()
+        common = {
+            "conference_type": "international", "organizer": "Fu Jen", "location_country": self.taiwan,
+            "location_city": "Taipei", "start_date": date(2026, 1, 1), "end_date": date(2026, 1, 2),
+            "participant_countries": [], "presentation_modes": [], "presented_paper": True,
+        }
+        with self.assertRaises(ValidationError):
+            save_conference_detail(actor=self.student_user, publication_id=publication.id, **common)
+        detail = save_conference_detail(
+            actor=self.student_user, publication_id=publication.id,
+            paper_title="Conference paper", paper_nature=ConferenceDetail.PaperNature.ACADEMIC,
+            paper_is_peer_reviewed=True, paper_page_count=12, has_international_collaboration=True,
+            international_collaboration_type="跨國共同研究", is_scopus_indexed=True, **common,
+        )
+        self.assertEqual(detail.paper_title, "Conference paper")
+        self.assertEqual(detail.paper_page_count, 12)
+        self.assertTrue(detail.is_scopus_indexed)
+        with self.assertRaises(ValidationError):
+            save_conference_detail(
+                actor=self.student_user, publication_id=publication.id,
+                paper_title="Conference paper", paper_nature=ConferenceDetail.PaperNature.ACADEMIC,
+                paper_page_count=12, has_international_collaboration=True,
+                international_collaboration_type="", **common,
+            )
 
     def test_revision_copies_detail_and_normalized_assignments(self):
         publication = self.publication()
