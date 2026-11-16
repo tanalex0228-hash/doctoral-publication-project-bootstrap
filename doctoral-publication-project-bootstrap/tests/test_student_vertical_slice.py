@@ -98,6 +98,23 @@ class StudentVerticalSliceTests(ContractFixture):
         self.client.post(reverse("publications:author_delete", args=[publication.id, first.id]))
         self.assertFalse(PublicationAuthor.objects.filter(pk=first.id).exists())
 
+    def test_system_student_author_links_the_selected_account_without_a_server_error(self):
+        publication = self.publication()
+        self.client.force_login(self.student_user)
+        response = self.client.post(reverse("publications:author_create", args=[publication.id]), {
+            "display_name": "ignored when a system student is selected",
+            "is_system_student": "on",
+            "system_student": str(self.student.id),
+            "student_author_order": PublicationAuthor.StudentAuthorOrder.FOURTH_OR_LATER,
+            "student_author_order_reason": "共同研究分工",
+            "student_author_attribute": PublicationAuthor.StudentAuthorAttribute.NEITHER,
+            "is_student_corresponding_author": "False",
+        })
+        self.assertEqual(response.status_code, 302)
+        author = publication.authors.get()
+        self.assertEqual(author.linked_user, self.student_user)
+        self.assertEqual(author.display_name, self.student.display_name)
+
     def test_document_requires_parent_publication_and_download_is_owner_scoped(self):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():

@@ -3,6 +3,30 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3"><h1 class="h3">{{ page_title }}</h1><a class="btn btn-outline-secondary" href="{% url 'publications:detail' publication.id %}">返回成果</a></div>
 <form method="post" class="card shadow-sm"><div class="card-body">{% csrf_token %}
-  {% for field in form %}<div class="mb-3">{% if field.field.widget.input_type == 'checkbox' %}<div class="form-check">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>{% else %}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>{% endfor %}
+  {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+  <div class="mb-3"><label class="form-label" for="{{ form.display_name.id_for_label }}">{{ form.display_name.label }}</label>{{ form.display_name }}{% for error in form.display_name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+  <div class="mb-3"><div class="form-check">{{ form.is_system_student }}<label class="form-check-label" for="{{ form.is_system_student.id_for_label }}">{{ form.is_system_student.label }}</label></div>{% for error in form.is_system_student.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+  <div id="system-student-fields" class="border-start border-3 ps-3 ms-1">
+    <div class="mb-3"><label class="form-label" for="{{ form.system_student.id_for_label }}">{{ form.system_student.label }}</label>{{ form.system_student }}{% for error in form.system_student.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+    <div class="mb-3"><label class="form-label" for="{{ form.student_author_order.id_for_label }}">作者序</label>{{ form.student_author_order }}{% for error in form.student_author_order.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+    <div id="fourth-author-reason" class="mb-3"><label class="form-label" for="{{ form.student_author_order_reason.id_for_label }}">第四作者（含）以後原因</label>{{ form.student_author_order_reason }}{% for error in form.student_author_order_reason.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+    <div class="mb-3"><label class="form-label" for="{{ form.student_author_attribute.id_for_label }}">作者屬性</label>{{ form.student_author_attribute }}{% for error in form.student_author_attribute.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+    <div class="mb-3"><label class="form-label" for="{{ form.is_student_corresponding_author.id_for_label }}">通訊作者</label>{{ form.is_student_corresponding_author }}{% for error in form.is_student_corresponding_author.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+  </div>
 </div><div class="card-footer bg-white text-end"><button class="btn btn-primary" type="submit">{{ submit_label }}</button></div></form>
+<script>
+  (() => {
+    const systemStudent = document.getElementById("{{ form.is_system_student.id_for_label }}");
+    const systemFields = document.getElementById("system-student-fields");
+    const authorOrder = document.getElementById("{{ form.student_author_order.id_for_label }}");
+    const fourthReason = document.getElementById("fourth-author-reason");
+    const toggleFields = () => {
+      systemFields.hidden = !systemStudent.checked;
+      fourthReason.hidden = !systemStudent.checked || authorOrder.value !== "fourth_or_later";
+    };
+    systemStudent.addEventListener("change", toggleFields);
+    authorOrder.addEventListener("change", toggleFields);
+    toggleFields();
+  })();
+</script>
 {% endblock %}

@@ -57,7 +57,7 @@ def _review_list(request, *, kind=None):
     query = request.GET.get("q", "").strip()
     publication_type = request.GET.get("type", "")
     if query:
-        publications = publications.filter(Q(title__icontains=query) | Q(owner_student__display_name__icontains=query) | Q(owner_student__student_number__icontains=query))
+        publications = publications.filter(Q(title__icontains=query))
     if publication_type:
         publications = publications.filter(publication_type_id=publication_type)
     sort_options = {

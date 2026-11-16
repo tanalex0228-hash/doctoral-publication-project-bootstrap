@@ -109,6 +109,16 @@ class PublicationAuthorForm(BootstrapFormMixin, forms.ModelForm):
         student = cleaned.get("system_student")
         if is_system_student and not student:
             self.add_error("system_student", "請選擇本校系統學生。")
+        # ``linked_user`` is intentionally an internal model field rather than
+        # a user-editable form field.  Set it before ModelForm's model
+        # validation runs, otherwise PublicationAuthor.clean() correctly
+        # rejects the record but Django cannot attach its error to a form
+        # field and turns it into a 500.
+        if is_system_student and student:
+            self.instance.linked_user = student.user
+            self.instance.display_name = student.display_name
+        elif not is_system_student:
+            self.instance.linked_user = None
         if not is_system_student:
             for field in ("student_author_order", "student_author_order_reason", "student_author_attribute", "is_student_corresponding_author"):
                 cleaned[field] = None if field == "is_student_corresponding_author" else ""

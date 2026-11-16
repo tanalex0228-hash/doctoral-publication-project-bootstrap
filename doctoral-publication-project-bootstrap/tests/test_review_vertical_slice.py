@@ -37,6 +37,14 @@ class ReviewVerticalSliceTests(ContractFixture):
             self.client.force_login(user)
             self.assertEqual(self.client.get(reverse("review:queue")).status_code, 404)
 
+    def test_review_search_is_limited_to_publication_titles(self):
+        publication = self.submitted_publication("Unique review title")
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("review:queue"), {"q": publication.owner_student.display_name})
+        self.assertNotContains(response, publication.title)
+        response = self.client.get(reverse("review:queue"), {"q": "Unique review title"})
+        self.assertContains(response, publication.title)
+
     def test_staff_queue_shows_only_submitted_records_and_supports_filtering(self):
         submitted = self.submitted_publication("Queue target")
         draft = self.publication()
