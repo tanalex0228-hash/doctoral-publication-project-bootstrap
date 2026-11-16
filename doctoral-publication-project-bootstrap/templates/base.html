@@ -8,7 +8,7 @@
   <style>
     :root { --fju-blue: #4b83cd; --fju-blue-hover: #356ead; --fju-navy: #10294d; --fju-page: #f3f6fb; --fju-border: #d7e1ef; }
     html, body { min-height: 100%; }
-    body { background: var(--fju-page); color: #263442; display: flex; flex-direction: column; }
+    body { background: var(--fju-page); color: #263442; display: flex; flex-direction: column; padding-bottom: 4.75rem; }
     .site-header { background: var(--fju-blue); box-shadow: 0 1px 0 rgba(0, 0, 0, .14); }
     .navbar-brand { font-weight: 700; letter-spacing: .03em; }
     .btn-primary { --bs-btn-bg: var(--fju-blue); --bs-btn-border-color: var(--fju-blue); --bs-btn-hover-bg: var(--fju-blue-hover); --bs-btn-hover-border-color: var(--fju-blue-hover); }
@@ -16,10 +16,10 @@
     .card { border-color: var(--fju-border); box-shadow: 0 .15rem .45rem rgba(27, 53, 86, .08) !important; }
     .card-header { border-bottom-color: var(--fju-border); }
     main { flex: 1 0 auto; }
-    .site-footer { background: var(--fju-navy); color: #dce8f8; margin-top: 2rem; }
+    .site-footer { background: var(--fju-navy); bottom: 0; color: #dce8f8; left: 0; margin-top: 0; position: fixed; right: 0; z-index: 1030; }
     .site-footer a { color: #fff; }
     .site-footer .form-control { min-width: 250px; }
-    @media (max-width: 575.98px) { .site-footer .form-control { min-width: 0; } }
+    @media (max-width: 575.98px) { body { padding-bottom: 8rem; } .site-footer .form-control { min-width: 0; } }
   </style>
 </head>
 <body>
