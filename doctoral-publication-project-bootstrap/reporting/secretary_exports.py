@@ -9,7 +9,7 @@ from publications.type_codes import CONFERENCE_TYPE_SLUGS, JOURNAL_TYPE_SLUGS
 
 
 JOURNAL_HEADERS = [
-    "教師", "教師代碼", "所屬單位", "學院", "狀態", "論文篇名", "期刊名", "作者", "發表進度",
+    "教師", "教師代碼", "所屬單位", "學院", "審核狀態", "論文篇名", "期刊名", "作者", "發表進度",
     "接受日期", "刊登日期", "卷號", "期別", "頁數", "期刊類型(舊)", "期刊類型(新)",
     "SCI、SSCI國際學術期刊排名", "收錄期刊之Impact factor", "臺灣人文及社會科學期刊評比暨核心期刊收錄級別",
     "作者序", "作者屬性", "通訊作者", "國際合作", "年度代表作", "審查機制", "出版媒體", "論文性質",
@@ -17,7 +17,7 @@ JOURNAL_HEADERS = [
 ]
 
 CONFERENCE_HEADERS = [
-    "教師", "教師代碼", "所屬單位", "學院", "狀態", "學術會議名", "會議屬性", "主辦單位", "會議地點國家",
+    "教師", "教師代碼", "所屬單位", "學院", "審核狀態", "學術會議名", "會議屬性", "主辦單位", "會議地點國家",
     "會議地點城市", "與會人員國家", "起始日期", "結束日期", "發表方式或任務", "是否發表論文", "論文篇名",
     "作者", "通訊作者", "作者序", "論文性質", "論文屬性", "論文是否有審查機制", "頁數", "國際合作",
     "國際合作類型", "SCOPUS收錄", "資料建立時間", "備註", "SDGs",
@@ -43,6 +43,10 @@ def _sdgs(publication):
     return ", ".join(assignment.goal.display_name for assignment in publication.sdg_assignments.all())
 
 
+def _review_status(publication):
+    return "垃圾桶" if publication.is_trashed else publication.get_workflow_status_display()
+
+
 def _official_for_type(slugs, detail_relation):
     return official_publications().filter(publication_type__slug__in=slugs).select_related(
         "owner_student", "publication_type", detail_relation,
@@ -53,17 +57,18 @@ def _official_for_type(slugs, detail_relation):
     ).order_by("owner_student__student_number", "title")
 
 
-def journal_rows():
-    records = official_publications().filter(publication_type__slug__in=JOURNAL_TYPE_SLUGS).select_related(
-        "owner_student", "journal_detail__publication_country",
-    ).prefetch_related("authors", "sdg_assignments__goal").order_by("owner_student__student_number", "title")
+def journal_rows(records=None):
+    if records is None:
+        records = official_publications().filter(publication_type__slug__in=JOURNAL_TYPE_SLUGS).select_related(
+            "owner_student", "journal_detail__publication_country",
+        ).prefetch_related("authors", "sdg_assignments__goal").order_by("owner_student__student_number", "title")
     for publication in records:
         try:
             detail = publication.journal_detail
         except Exception:  # Legacy official rows may not yet be reconciled.
             detail = None
         yield _student_columns(publication) + [
-            "", publication.title, publication.journal_or_conference_name,
+            _review_status(publication), publication.title, publication.journal_or_conference_name,
             ", ".join(author.display_name for author in publication.authors.all()), publication.get_publication_stage_display(),
             _date(publication.accepted_date), _date(publication.publication_date), publication.volume, publication.issue,
             publication.pages_or_article_number,
@@ -82,8 +87,9 @@ def journal_rows():
         ]
 
 
-def conference_rows():
-    records = _official_for_type(CONFERENCE_TYPE_SLUGS, "conference_detail")
+def conference_rows(records=None):
+    if records is None:
+        records = _official_for_type(CONFERENCE_TYPE_SLUGS, "conference_detail")
     for publication in records:
         try:
             detail = publication.conference_detail
@@ -92,11 +98,19 @@ def conference_rows():
         countries = "、".join(str(item.country) for item in detail.participant_country_assignments.all()) if detail else ""
         modes = ", ".join(item.mode.display_name for item in detail.presentation_mode_assignments.all()) if detail else ""
         yield _student_columns(publication) + [
-            "", publication.journal_or_conference_name,
+            _review_status(publication), publication.journal_or_conference_name,
             detail.get_conference_type_display() if detail else "", detail.organizer if detail else "",
             str(detail.location_country) if detail else "", detail.location_city if detail else "", countries,
             _date(detail.start_date) if detail else "", _date(detail.end_date) if detail else "", modes,
-            _yes_no(detail.presented_paper) if detail else "", publication.title,
-            ", ".join(author.display_name for author in publication.authors.all()), "", "", "", "", "", "", "", "", "",
+            _yes_no(detail.presented_paper) if detail else "", detail.paper_title if detail else "",
+            ", ".join(author.display_name for author in publication.authors.all()),
+            ", ".join(author.display_name for author in publication.authors.all() if author.is_student_corresponding_author),
+            ", ".join(author.get_student_author_order_display() for author in publication.authors.all() if author.student_author_order),
+            detail.get_paper_nature_display() if detail and detail.paper_nature else "", "",
+            _yes_no(detail.paper_is_peer_reviewed) if detail else "",
+            detail.paper_page_count if detail and detail.paper_page_count is not None else "",
+            _yes_no(detail.has_international_collaboration) if detail else "",
+            detail.international_collaboration_type if detail else "",
+            _yes_no(detail.is_scopus_indexed) if detail else "",
             publication.created_at.isoformat(), detail.remarks if detail else "", _sdgs(publication),
         ]

@@ -1,8 +1,14 @@
+import csv
+from io import BytesIO
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import OuterRef, Q, Subquery
-from django.http import Http404
+from django.http import Http404, HttpResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from config.pagination import paginate_queryset
@@ -11,6 +17,8 @@ from publications.permissions import is_staff_actor
 from publications.querysets import is_official_publication, official_publications
 from publications.services import set_published, set_visibility, trash_publication
 from publications.type_codes import CONFERENCE_TYPE_SLUGS, JOURNAL_TYPE_SLUGS, publication_detail_kind
+from reporting.secretary_exports import CONFERENCE_HEADERS, JOURNAL_HEADERS, conference_rows, journal_rows
+from reporting.services import csv_safe_cell
 from taxonomy.models import PublicationType
 from .forms import PublicationSettingsForm, ReturnForRevisionForm, RevokeApprovalForm
 from .models import PublicationTransition
@@ -34,26 +42,31 @@ def _review_queryset():
     )
 
 
-@login_required
-def _review_list(request, *, kind=None):
-    _require_review_role(request)
+def _filtered_review_publications(request, *, kind=None):
+    """One filtered queryset for both the secretary list and its downloads."""
     publications = _review_queryset().filter(is_purged=False)
     if kind == "journal":
         publications = publications.filter(publication_type__slug__in=JOURNAL_TYPE_SLUGS)
     elif kind == "conference":
         publications = publications.filter(publication_type__slug__in=CONFERENCE_TYPE_SLUGS)
+
     status = request.GET.get("status", PublicationRecord.WorkflowStatus.SUBMITTED)
     allowed_statuses = {
         PublicationRecord.WorkflowStatus.SUBMITTED,
         PublicationRecord.WorkflowStatus.RETURNED,
         PublicationRecord.WorkflowStatus.APPROVED,
+        "all",
         "trash",
     }
     if status not in allowed_statuses:
         status = PublicationRecord.WorkflowStatus.SUBMITTED
-    publications = publications.filter(is_trashed=status == "trash")
-    if status != "trash":
-        publications = publications.filter(workflow_status=status)
+    if status == "trash":
+        publications = publications.filter(is_trashed=True)
+    elif status == "all":
+        publications = publications.filter(is_trashed=False)
+    else:
+        publications = publications.filter(is_trashed=False, workflow_status=status)
+
     query = request.GET.get("q", "").strip()
     publication_type = request.GET.get("type", "")
     if query:
@@ -69,7 +82,54 @@ def _review_list(request, *, kind=None):
         "type": ("publication_type__display_order", "publication_type__display_name", "-submitted_at"),
     }
     sort = request.GET.get("sort", "submitted_at")
-    publications = publications.order_by(*sort_options.get(sort, sort_options["submitted_at"]))
+    return publications.order_by(*sort_options.get(sort, sort_options["submitted_at"])), {
+        "status": status,
+        "query": query,
+        "publication_type": publication_type,
+        "sort": sort,
+    }
+
+
+def _csv_download(*, filename, headers, rows):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.write("\ufeff")
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow([csv_safe_cell(value) for value in row])
+    return response
+
+
+def _xlsx_download(*, filename, worksheet_title, headers, rows):
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = worksheet_title[:31]
+    worksheet.append(headers)
+    for cell in worksheet[1]:
+        cell.font = Font(bold=True)
+    worksheet.freeze_panes = "A2"
+    for row in rows:
+        worksheet.append([csv_safe_cell(value) for value in row])
+    worksheet.auto_filter.ref = worksheet.dimensions
+    for index, column in enumerate(worksheet.columns, start=1):
+        worksheet.column_dimensions[get_column_letter(index)].width = min(
+            max((len(str(cell.value or "")) for cell in column), default=0) + 2, 40
+        )
+    stream = BytesIO()
+    workbook.save(stream)
+    response = HttpResponse(
+        stream.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def _review_list(request, *, kind=None):
+    _require_review_role(request)
+    publications, filters = _filtered_review_publications(request, kind=kind)
     page_obj, pagination_query = paginate_queryset(request, publications)
     return render(request, "review/review_queue.html", {
         "publications": page_obj,
@@ -77,10 +137,10 @@ def _review_list(request, *, kind=None):
         "pagination_query": pagination_query,
         "result_total": publications.count(),
         "publication_types": PublicationType.objects.filter(is_active=True),
-        "selected_type": publication_type,
-        "query": query,
-        "sort": sort,
-        "status": status,
+        "selected_type": filters["publication_type"],
+        "query": filters["query"],
+        "sort": filters["sort"],
+        "status": filters["status"],
         "kind": kind,
         "page_title": "期刊論文清單" if kind == "journal" else "學術會議清單" if kind == "conference" else "秘書審核清單",
     })
@@ -100,6 +160,28 @@ def journal_list(request):
 @login_required
 def conference_list(request):
     return _review_list(request, kind="conference")
+
+
+@login_required
+def review_export(request, kind):
+    _require_review_role(request)
+    if kind not in {"journal", "conference"}:
+        raise Http404("Export resource not found.")
+    export_format = request.GET.get("format", "xlsx")
+    if export_format not in {"csv", "xlsx"}:
+        raise Http404("Export format not found.")
+    publications, _ = _filtered_review_publications(request, kind=kind)
+    if kind == "journal":
+        headers, rows, filename, worksheet_title = (
+            JOURNAL_HEADERS, journal_rows(publications), "filtered-journal-publications", "期刊論文清單",
+        )
+    else:
+        headers, rows, filename, worksheet_title = (
+            CONFERENCE_HEADERS, conference_rows(publications), "filtered-conference-publications", "學術會議出席清單",
+        )
+    if export_format == "csv":
+        return _csv_download(filename=f"{filename}.csv", headers=headers, rows=rows)
+    return _xlsx_download(filename=f"{filename}.xlsx", worksheet_title=worksheet_title, headers=headers, rows=rows)
 
 
 @login_required

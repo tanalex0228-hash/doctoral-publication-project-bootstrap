@@ -11,7 +11,7 @@ from publications.services import (
     trash_publication,
     update_publication,
 )
-from review.services import return_for_revision
+from review.services import approve_publication, return_for_revision
 from tests.test_core_contract import ContractFixture
 
 
@@ -94,3 +94,33 @@ class SimplifiedSecretaryWorkflowTests(ContractFixture):
         trash = self.client.get(reverse("review:journal_list"), {"status": "trash"})
         self.assertContains(trash, trashed.title)
         self.assertNotContains(trash, submitted.title)
+
+    def test_secretary_filtered_type_lists_export_csv_and_xlsx_with_review_status(self):
+        submitted = self._submitted("匯出待審")
+        approved = self._submitted("匯出核可")
+        returned = self._submitted("匯出駁回")
+        trashed = self._submitted("匯出垃圾桶")
+        approve_publication(actor=self.staff, publication_id=approved.id)
+        return_for_revision(actor=self.staff, publication_id=returned.id, reason="請補正")
+        trash_publication(actor=self.staff, publication_id=trashed.id)
+        self.client.force_login(self.staff)
+
+        all_records = self.client.get(reverse("review:journal_list"), {"status": "all"})
+        self.assertContains(all_records, submitted.title)
+        self.assertContains(all_records, approved.title)
+        self.assertContains(all_records, returned.title)
+        self.assertNotContains(all_records, trashed.title)
+
+        csv_response = self.client.get(reverse("review:export", args=["journal"]), {"status": "all", "format": "csv"})
+        self.assertEqual(csv_response.status_code, 200)
+        self.assertEqual(csv_response["Content-Type"], "text/csv; charset=utf-8")
+        csv_content = csv_response.content.decode("utf-8-sig")
+        self.assertIn("審核狀態", csv_content)
+        self.assertIn("已送審", csv_content)
+        self.assertIn("已核准", csv_content)
+        self.assertIn("已退回", csv_content)
+        self.assertNotIn(trashed.title, csv_content)
+
+        xlsx_response = self.client.get(reverse("review:export", args=["journal"]), {"status": "all", "format": "xlsx"})
+        self.assertEqual(xlsx_response.status_code, 200)
+        self.assertTrue(xlsx_response.content.startswith(b"PK"))

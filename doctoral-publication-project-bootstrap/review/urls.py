@@ -6,6 +6,7 @@ urlpatterns = [
     path("queue/", views.review_queue, name="queue"),
     path("journals/", views.journal_list, name="journal_list"),
     path("conferences/", views.conference_list, name="conference_list"),
+    path("<str:kind>/export/", views.review_export, name="export"),
     path("archive/", views.archive_list, name="archive_list"),
     path("publications/<uuid:publication_id>/", views.review_detail, name="detail"),
     path("publications/<uuid:publication_id>/approve/", views.approve, name="approve"),
