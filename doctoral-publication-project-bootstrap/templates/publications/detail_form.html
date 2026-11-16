@@ -6,11 +6,19 @@
   {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
   <div class="row g-3">
   {% for field in form %}
+    {% if detail_kind == 'conference' and field.name == 'participant_countries' %}
+    <div class="col-12 detail-field" data-name="{{ field.name }}"><details class="border rounded p-3"><summary class="fw-semibold">{{ field.label }} <span class="text-muted fw-normal">（最多 5 國；點此展開勾選）</span></summary><div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-2 mt-2">{% for choice in field %}<div class="col"><div class="form-check">{{ choice.tag }}<label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label></div></div>{% endfor %}</div></details>{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+    {% elif detail_kind == 'conference' and field.name == 'presentation_modes' %}
+    <div class="col-12 detail-field" data-name="{{ field.name }}"><label class="form-label d-block">{{ field.label }}</label><div class="d-flex flex-wrap gap-3">{% for choice in field %}<div class="form-check">{{ choice.tag }}<label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label></div>{% endfor %}</div>{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+    {% elif detail_kind == 'conference' and field.name == 'sdgs' %}
+    <div class="col-12 detail-field" data-name="{{ field.name }}"><label class="form-label d-block">{{ field.label }} <span class="text-muted fw-normal">（最多 3 項）</span></label><div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-2">{% for choice in field %}<div class="col"><div class="form-check">{{ choice.tag }}<label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label></div></div>{% endfor %}</div>{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+    {% else %}
     <div class="col-md-6 detail-field" data-name="{{ field.name }}">
       {% if field.field.widget.input_type == 'checkbox' %}<div class="form-check mt-4">{{ field }}<label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label></div>
       {% else %}<label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}
       {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
     </div>
+    {% endif %}
   {% endfor %}
   </div>
 </div><div class="card-footer bg-white text-end"><button class="btn btn-primary" type="submit">儲存明細</button></div></form>
