@@ -43,3 +43,22 @@ class UserRole(models.Model):
         constraints = [models.UniqueConstraint(fields=["user", "role"], name="uq_user_role")]
         verbose_name = "使用者角色"
         verbose_name_plural = "使用者角色"
+
+
+class SiteConfiguration(models.Model):
+    """Small, singleton, root-governed settings rendered by the public shell."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    support_email = models.EmailField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="updated_site_configurations",
+    )
+
+    class Meta:
+        verbose_name = "網站設定"
+        verbose_name_plural = "網站設定"
+
+    def __str__(self):
+        return "網站設定"

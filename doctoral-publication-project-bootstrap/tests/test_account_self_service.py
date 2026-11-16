@@ -1,6 +1,8 @@
 from django.test import TestCase
 from django.urls import reverse
 
+from accounts.models import SiteConfiguration, User
+from audit.models import AuditLog
 from publications.services import create_publication
 from tests.test_core_contract import ContractFixture
 
@@ -32,3 +34,20 @@ class AccountSelfServiceTests(ContractFixture):
         self.student_user.refresh_from_db()
         self.assertTrue(self.student_user.check_password("A-new-test-password-902!"))
         self.assertEqual(self.client.get(reverse("accounts:profile")).status_code, 200)
+
+    def test_only_root_can_update_the_footer_support_email(self):
+        self.client.force_login(self.student_user)
+        response = self.client.post(reverse("accounts:update_support_email"), {"support_email": "help@example.edu"})
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(SiteConfiguration.objects.exists())
+
+        root = User.objects.create_superuser("root-footer", "root-footer@example.edu", "pass")
+        self.client.force_login(root)
+        response = self.client.post(reverse("accounts:update_support_email"), {
+            "support_email": "help@example.edu", "next": reverse("accounts:profile"),
+        })
+        self.assertRedirects(response, reverse("accounts:profile"))
+        configuration = SiteConfiguration.objects.get(pk=1)
+        self.assertEqual(configuration.support_email, "help@example.edu")
+        self.assertEqual(configuration.updated_by, root)
+        self.assertTrue(AuditLog.objects.filter(action="site_configuration.support_email_updated", target_id=configuration.id).exists())

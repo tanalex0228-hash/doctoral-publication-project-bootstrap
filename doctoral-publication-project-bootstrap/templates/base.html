@@ -5,9 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}博士班成果管理系統{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root { --fju-blue: #4b83cd; --fju-blue-hover: #356ead; --fju-navy: #10294d; --fju-page: #f3f6fb; --fju-border: #d7e1ef; }
+    html, body { min-height: 100%; }
+    body { background: var(--fju-page); color: #263442; display: flex; flex-direction: column; }
+    .site-header { background: var(--fju-blue); box-shadow: 0 1px 0 rgba(0, 0, 0, .14); }
+    .navbar-brand { font-weight: 700; letter-spacing: .03em; }
+    .btn-primary { --bs-btn-bg: var(--fju-blue); --bs-btn-border-color: var(--fju-blue); --bs-btn-hover-bg: var(--fju-blue-hover); --bs-btn-hover-border-color: var(--fju-blue-hover); }
+    .btn-outline-primary { --bs-btn-color: var(--fju-blue-hover); --bs-btn-border-color: var(--fju-blue); --bs-btn-hover-bg: var(--fju-blue); --bs-btn-hover-border-color: var(--fju-blue); }
+    .card { border-color: var(--fju-border); box-shadow: 0 .15rem .45rem rgba(27, 53, 86, .08) !important; }
+    .card-header { border-bottom-color: var(--fju-border); }
+    main { flex: 1 0 auto; }
+    .site-footer { background: var(--fju-navy); color: #dce8f8; margin-top: 2rem; }
+    .site-footer a { color: #fff; }
+    .site-footer .form-control { min-width: 250px; }
+    @media (max-width: 575.98px) { .site-footer .form-control { min-width: 0; } }
+  </style>
 </head>
-<body class="bg-light">
-  <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark site-header mb-4">
     <div class="container">
       <div class="d-flex align-items-center gap-3"><a class="navbar-brand mb-0" href="{% url 'accounts:home' %}">博士班成果管理</a></div>
       {% if user.is_authenticated %}<div class="d-flex align-items-center gap-2"><a class="navbar-text text-white text-decoration-none" href="{% url 'accounts:profile' %}">{{ user.username }}</a><a class="btn btn-sm btn-outline-light" href="{% url 'accounts:password_change' %}">變更密碼</a>{% if can_access_review %}<a class="btn btn-sm btn-success" href="{% url 'review:queue' %}">秘書審核</a>{% endif %}{% if can_access_admin %}<a class="btn btn-sm btn-warning" href="{% url 'admin:index' %}">Django 管理後台</a>{% endif %}<form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-light">登出</button></form></div>{% endif %}
@@ -21,6 +37,18 @@
     {% endfor %}
     {% block content %}{% endblock %}
   </main>
+  <footer class="site-footer py-3">
+    <div class="container d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 small">
+      <span>© {% now "Y" %} 輔仁大學商學博士班成果管理系統</span>
+      {% if can_edit_support_email %}
+      <form method="post" action="{% url 'accounts:update_support_email' %}" class="d-flex flex-wrap align-items-center gap-2">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><label class="visually-hidden" for="support-email">聯絡信箱</label><input id="support-email" class="form-control form-control-sm" type="email" name="support_email" value="{{ support_contact_email }}" placeholder="設定聯絡信箱" required><button class="btn btn-sm btn-outline-light" type="submit">更新聯絡信箱</button></form>
+      {% elif support_contact_email %}
+      <a href="mailto:{{ support_contact_email }}">問題聯絡：{{ support_contact_email }}</a>
+      {% else %}
+      <span>問題聯絡信箱尚未設定</span>
+      {% endif %}
+    </div>
+  </footer>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+from django.http import Http404
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
@@ -11,6 +12,9 @@ from publications.permissions import is_staff_actor
 from doctoral_students.models import DoctoralStudentProfile
 from publications.models import PublicationRecord
 from publications.querysets import official_publications
+from audit.services import record_event
+from .forms import SupportEmailForm
+from .models import SiteConfiguration
 
 
 def _post_login_destination(user):
@@ -85,3 +89,25 @@ def password_change_view(request):
         messages.success(request, "密碼已更新。")
         return redirect("accounts:profile")
     return render(request, "accounts/password_change.html", {"form": form})
+
+
+@login_required
+@require_POST
+def update_support_email(request):
+    """Only the explicit Django root may change the footer contact address."""
+    if not request.user.is_superuser:
+        raise Http404("Resource not found.")
+    form = SupportEmailForm(request.POST)
+    if form.is_valid():
+        configuration, _ = SiteConfiguration.objects.update_or_create(
+            pk=1,
+            defaults={"support_email": form.cleaned_data["support_email"], "updated_by": request.user},
+        )
+        record_event(actor=request.user, action="site_configuration.support_email_updated", target=configuration)
+        messages.success(request, "頁尾聯絡信箱已更新。")
+    else:
+        messages.error(request, "請輸入有效的聯絡信箱。")
+    next_url = request.POST.get("next")
+    if next_url and url_has_allowed_host_and_scheme(next_url, {request.get_host()}, request.is_secure()):
+        return redirect(next_url)
+    return redirect("accounts:home")

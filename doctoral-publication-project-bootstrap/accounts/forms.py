@@ -18,3 +18,7 @@ class UserRoleActionForm(ActionForm):
         choices=(("", "請選擇權限群組"), ("advisor", "教師"), ("student", "學生"), ("admin", "管理員")),
         required=False,
     )
+
+
+class SupportEmailForm(forms.Form):
+    support_email = forms.EmailField(label="聯絡信箱")
